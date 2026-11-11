@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.65"
+        android:scaleY="0.65"
+        android:translateX="18.9"
+        android:translateY="18.9">
+        <!-- Outer Gold Diamond Frame -->
+        <path
+            android:strokeColor="#C5A880"
+            android:strokeWidth="1.5"
+            android:pathData="M54,10 L98,54 L54,98 L10,54 Z" />
+        <!-- Inner Editorial Monogram A -->
+        <path
+            android:fillColor="#F9F7F2"
+            android:pathData="M54,28 L68,76 L61,76 L57,61 L51,61 L47,76 L40,76 Z M54,42 L52,55 L56,55 Z" />
+    </group>
+</vector>

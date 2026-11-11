@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">ATELIER ARCHIVE</string>
+    <string name="app_subtitle">HAUTE ARCHIVE · 典藏纪</string>
+    <string name="masthead_issue">N° 08 · EDITION PRIVÉE</string>
+    <string name="input_placeholder">在此键入或粘贴小红书笔记分享文本…</string>
+    <string name="btn_archive">ARCHIVE · 立即解析</string>
+    <string name="btn_paste">PASTE · 粘贴</string>
+    <string name="btn_clear">CLEAR · 清空</string>
+    <string name="btn_download_all">COLLECT ALL · 保存全部无水印图集</string>
+    <string name="btn_download_video">COLLECT VIDEO · 保存无水印原画视频</string>
+    <string name="clipboard_detected">DETECTED IN CLIPBOARD · 检测到小红书分享短链</string>
+    <string name="clipboard_parse_now">PARSE NOW · 立即提取</string>
+    <string name="downloading_format">ARCHIVING %1$d OF %2$d · 正在保全素材…</string>
+    <string name="download_success">SAVED TO GALLERY · 已臻藏至系统相册</string>
+</resources>

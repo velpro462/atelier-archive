@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.AtelierArchive" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#F9F7F2</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">#F9F7F2</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowBackground">#F9F7F2</item>
+    </style>
+</resources>
