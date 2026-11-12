@@ -38,6 +38,8 @@ fun MainScreen(
     val detectedClipboardUrl by viewModel.detectedClipboardUrl.collectAsState()
     val inspectMedia by viewModel.inspectMedia.collectAsState()
     val isSettingsOpen by viewModel.isSettingsOpen.collectAsState()
+    val isHistoryOpen by viewModel.isHistoryOpen.collectAsState()
+    val historyList by viewModel.historyList.collectAsState()
     val customCookie by viewModel.customCookie.collectAsState()
 
     val clipboardManager = remember {
@@ -57,7 +59,7 @@ fun MainScreen(
         ) {
             // Masthead
             EditorialHeader(
-                onOpenSettings = { viewModel.openSettings() }
+                onOpenHistory = { viewModel.openHistory() }
             )
 
             // Utility Bar (Settings & Monogram)
@@ -80,19 +82,21 @@ fun MainScreen(
                             android.widget.Toast.makeText(context, "提示：普通情况不用配置这个东西，直接粘贴链接提取即可", android.widget.Toast.LENGTH_LONG).show()
                             viewModel.openSettings()
                         }
-                        .padding(4.dp),
+                        .background(ParchmentCard, androidx.compose.foundation.shape.RoundedCornerShape(3.dp))
+                        .border(0.5.dp, HairlineBorder, androidx.compose.foundation.shape.RoundedCornerShape(3.dp))
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Tune,
                         contentDescription = "Settings",
                         tint = DeepGold,
-                        modifier = Modifier.size(13.dp)
+                        modifier = Modifier.size(15.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
                     Text(
                         text = "凭证配置",
-                        style = EditorialTypography.labelSmall,
+                        style = EditorialTypography.labelMedium.copy(fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
                         color = DeepGold
                     )
                 }
@@ -287,6 +291,17 @@ fun MainScreen(
                 mediaUrl = url,
                 isVideo = isVideo,
                 onDismiss = { viewModel.closeInspect() }
+            )
+        }
+
+        // History Records Dialog
+        if (isHistoryOpen) {
+            HistoryDialog(
+                historyList = historyList,
+                onSelect = { viewModel.selectHistoryItem(it) },
+                onDelete = { viewModel.deleteHistoryItem(it) },
+                onClearAll = { viewModel.clearAllHistory() },
+                onDismiss = { viewModel.closeHistory() }
             )
         }
 
