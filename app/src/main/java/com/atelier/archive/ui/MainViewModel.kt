@@ -4,7 +4,9 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.atelier.archive.data.HistoryManager
 import com.atelier.archive.model.DownloadState
+import com.atelier.archive.model.HistoryItem
 import com.atelier.archive.model.NoteType
 import com.atelier.archive.model.ParseState
 import com.atelier.archive.network.ArchiveDispatcher
@@ -36,6 +38,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSettingsOpen = MutableStateFlow(false)
     val isSettingsOpen = _isSettingsOpen.asStateFlow()
 
+    private val _isHistoryOpen = MutableStateFlow(false)
+    val isHistoryOpen = _isHistoryOpen.asStateFlow()
+
+    private val _historyList = MutableStateFlow<List<HistoryItem>>(emptyList())
+    val historyList = _historyList.asStateFlow()
+
     fun updateInput(text: String) {
         _inputText.value = text
     }
@@ -64,6 +72,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isSettingsOpen.value = false
     }
 
+    fun openHistory() {
+        _historyList.value = HistoryManager.getHistory(getApplication())
+        _isHistoryOpen.value = true
+    }
+
+    fun closeHistory() {
+        _isHistoryOpen.value = false
+    }
+
+    fun deleteHistoryItem(id: String) {
+        HistoryManager.deleteRecord(getApplication(), id)
+        _historyList.value = HistoryManager.getHistory(getApplication())
+    }
+
+    fun clearAllHistory() {
+        HistoryManager.clearHistory(getApplication())
+        _historyList.value = emptyList()
+    }
+
+    fun selectHistoryItem(item: HistoryItem) {
+        _isHistoryOpen.value = false
+        updateInput(item.shareUrl)
+        parseUrl(item.shareUrl)
+    }
+
     fun saveCookie(cookie: String) {
         _customCookie.value = cookie
     }
@@ -88,6 +121,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val result = ArchiveDispatcher.parse(target, _customCookie.value, getApplication())
             result.onSuccess { note ->
                 _parseState.value = ParseState.Success(note)
+                HistoryManager.addRecord(getApplication(), note)
             }.onFailure { error ->
                 _parseState.value = ParseState.Error(
                     error.localizedMessage ?: "FAILED TO EXTRACT NOTE FROM ARCHIVE"
@@ -103,7 +137,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val note = state.note
         if (pageIndex !in note.images.indices) return
 
-        _downloadState.value = DownloadState.Progress(0, 1)
+        _downloadState.value = DownloadState.Progress(
+            current = 0,
+            total = 1,
+            bytesDownloaded = 0L,
+            totalBytes = 0L,
+            percent = 0f
+        )
 
         viewModelScope.launch {
             val result = MediaDownloader.downloadSingleImage(
@@ -112,8 +152,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 platform = note.platform,
                 url = note.images[pageIndex],
                 pageIndex = pageIndex,
-                onProgress = { cur, tot ->
-                    _downloadState.value = DownloadState.Progress(cur, tot)
+                onProgress = { bytesRead, totalBytes, percent ->
+                    _downloadState.value = DownloadState.Progress(
+                        current = 0,
+                        total = 1,
+                        bytesDownloaded = bytesRead,
+                        totalBytes = totalBytes,
+                        percent = percent
+                    )
                 }
             )
             result.onSuccess {
@@ -129,10 +175,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (state !is ParseState.Success) return
 
         val note = state.note
-        _downloadState.value = DownloadState.Progress(0, if (note.type == NoteType.VIDEO) 1 else note.images.size)
+        val isVideo = note.type == NoteType.VIDEO
+
+        _downloadState.value = DownloadState.Progress(
+            current = 0,
+            total = if (isVideo) 1 else note.images.size,
+            bytesDownloaded = 0L,
+            totalBytes = 0L,
+            percent = 0f
+        )
 
         viewModelScope.launch {
-            if (note.type == NoteType.VIDEO) {
+            if (isVideo) {
                 val videoUrl = note.videoUrl
                 if (videoUrl.isNullOrBlank()) {
                     _downloadState.value = DownloadState.Error("NO VALID VIDEO URL")
@@ -143,8 +197,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     noteId = note.id,
                     platform = note.platform,
                     url = videoUrl,
-                    onProgress = { cur, tot ->
-                        _downloadState.value = DownloadState.Progress(cur, tot)
+                    onProgress = { bytesRead, totalBytes, percent ->
+                        _downloadState.value = DownloadState.Progress(
+                            current = 0,
+                            total = 1,
+                            bytesDownloaded = bytesRead,
+                            totalBytes = totalBytes,
+                            percent = percent
+                        )
                     }
                 )
                 result.onSuccess {
@@ -158,8 +218,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     noteId = note.id,
                     platform = note.platform,
                     urls = note.images,
-                    onProgress = { cur, tot ->
-                        _downloadState.value = DownloadState.Progress(cur, tot)
+                    onProgress = { cur, tot, pct ->
+                        _downloadState.value = DownloadState.Progress(
+                            current = cur,
+                            total = tot,
+                            bytesDownloaded = 0L,
+                            totalBytes = 0L,
+                            percent = pct
+                        )
                     }
                 )
                 result.onSuccess { count ->
