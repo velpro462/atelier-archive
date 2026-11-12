@@ -56,3 +56,11 @@ data class HistoryItem(
     val itemCount: Int,
     val timestamp: Long = System.currentTimeMillis()
 )
+
+data class InspectState(
+    val isVideo: Boolean,
+    val videoUrl: String? = null,
+    val images: List<String> = emptyList(),
+    val initialIndex: Int = 0,
+    val platform: String = ""
+)
