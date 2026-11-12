@@ -318,26 +318,38 @@ fun MagazineNoteCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(ParchmentBase)
-                        .border(0.5.dp, ChampagneGold, RoundedCornerShape(2.dp))
-                        .padding(14.dp),
+                        .border(0.8.dp, ChampagneGold, RoundedCornerShape(3.dp))
+                        .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    val progressValue = downloadState.percent.coerceIn(0f, 1f)
                     LinearProgressIndicator(
-                        progress = {
-                            if (downloadState.total > 0)
-                                downloadState.current.toFloat() / downloadState.total
-                            else 0f
-                        },
+                        progress = { progressValue },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(4.dp),
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
                         color = ChampagneGold,
                         trackColor = HairlineBorder
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    val progressText = if (downloadState.totalBytes > 0) {
+                        val pct = (downloadState.percent * 100).toInt()
+                        val downloadedStr = formatMediaSize(downloadState.bytesDownloaded)
+                        val totalStr = formatMediaSize(downloadState.totalBytes)
+                        "正在保存 · $pct% ($downloadedStr / $totalStr)"
+                    } else if (downloadState.total > 1) {
+                        val pct = (downloadState.percent * 100).toInt()
+                        "正在保存 · 第 ${downloadState.current} / ${downloadState.total} 张 ($pct%)"
+                    } else {
+                        val pct = (downloadState.percent * 100).toInt()
+                        "正在保存至系统相册 · $pct%"
+                    }
+
                     Text(
-                        text = "ARCHIVING TO STORAGE · 正在转存 ${downloadState.current} / ${downloadState.total}",
-                        style = EditorialTypography.labelSmall,
+                        text = progressText,
+                        style = EditorialTypography.labelMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
                         color = DeepGold
                     )
                 }
@@ -377,5 +389,16 @@ fun MagazineNoteCard(
                 )
             }
         }
+    }
+}
+
+private fun formatMediaSize(bytes: Long): String {
+    if (bytes <= 0L) return "0 KB"
+    val kb = bytes / 1024.0
+    val mb = kb / 1024.0
+    return if (mb >= 1.0) {
+        String.format(java.util.Locale.US, "%.1f MB", mb)
+    } else {
+        String.format(java.util.Locale.US, "%.0f KB", kb)
     }
 }
