@@ -1,7 +1,8 @@
 package com.atelier.archive.ui
 
+import android.app.Application
 import android.content.Context
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.atelier.archive.model.DownloadState
 import com.atelier.archive.model.NoteType
@@ -12,7 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class MainViewModel : ViewModel() {
+class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _inputText = MutableStateFlow("")
     val inputText = _inputText.asStateFlow()
@@ -84,7 +85,7 @@ class MainViewModel : ViewModel() {
         _detectedClipboardUrl.value = null
 
         viewModelScope.launch {
-            val result = ArchiveDispatcher.parse(target, _customCookie.value)
+            val result = ArchiveDispatcher.parse(target, _customCookie.value, getApplication())
             result.onSuccess { note ->
                 _parseState.value = ParseState.Success(note)
             }.onFailure { error ->
