@@ -62,6 +62,34 @@ object MediaDownloader {
         }
     }
 
+    suspend fun downloadSingleImage(
+        context: Context,
+        noteId: String,
+        platform: Platform,
+        url: String,
+        pageIndex: Int,
+        onProgress: (current: Int, total: Int) -> Unit
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        runCatching {
+            onProgress(0, 1)
+            val referer = if (platform == Platform.XIAOHONGSHU) "https://www.xiaohongshu.com/" else "https://www.douyin.com/"
+            val fileName = "ARCHIVE_${platform.code}_${noteId}_p${pageIndex + 1}_${System.currentTimeMillis()}.jpg"
+            val success = downloadStreamToGallery(
+                context = context,
+                url = url,
+                referer = referer,
+                fileName = fileName,
+                mimeType = "image/jpeg",
+                isImage = true
+            )
+            onProgress(1, 1)
+            if (!success) {
+                throw IllegalStateException("FAILED TO ARCHIVE IMAGE TO GALLERY")
+            }
+            true
+        }
+    }
+
     suspend fun downloadVideo(
         context: Context,
         noteId: String,
