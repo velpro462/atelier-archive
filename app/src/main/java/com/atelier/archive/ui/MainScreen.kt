@@ -75,7 +75,10 @@ fun MainScreen(
 
                 Row(
                     modifier = Modifier
-                        .clickable { viewModel.openSettings() }
+                        .clickable {
+                            android.widget.Toast.makeText(context, "提示：普通情况不用配置这个东西，直接粘贴链接提取即可", android.widget.Toast.LENGTH_LONG).show()
+                            viewModel.openSettings()
+                        }
                         .padding(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -87,7 +90,7 @@ fun MainScreen(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "PREFERENCES",
+                        text = "凭证配置",
                         style = EditorialTypography.labelSmall,
                         color = DeepGold
                     )
