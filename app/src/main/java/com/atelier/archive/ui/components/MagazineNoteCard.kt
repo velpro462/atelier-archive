@@ -37,10 +37,12 @@ fun MagazineNoteCard(
     note: NoteDetail,
     downloadState: DownloadState,
     onDownloadClicked: () -> Unit,
+    onDownloadCurrentClicked: (Int) -> Unit = {},
     onImageClicked: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var isDescExpanded by remember { mutableStateOf(false) }
+    val pagerState = rememberPagerState(pageCount = { note.images.size })
 
     Column(
         modifier = modifier
@@ -189,8 +191,6 @@ fun MagazineNoteCard(
         } else {
             // Image Folio Pager
             if (note.images.isNotEmpty()) {
-                val pagerState = rememberPagerState(pageCount = { note.images.size })
-
                 Column {
                     Box(
                         modifier = Modifier
@@ -254,32 +254,62 @@ fun MagazineNoteCard(
         // Download Action Section
         when (downloadState) {
             is DownloadState.Idle -> {
-                Button(
-                    onClick = onDownloadClicked,
-                    shape = RoundedCornerShape(2.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ChampagneGold,
-                        contentColor = InkPrimary
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Download,
-                        contentDescription = "Download",
-                        modifier = Modifier.size(16.dp),
-                        tint = InkPrimary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (note.type == NoteType.VIDEO)
-                            "COLLECT VIDEO · 臻藏无水印视频至相册"
-                        else
-                            "COLLECT ALL (${note.images.size}) · 臻藏全部高清原图",
-                        style = EditorialTypography.labelLarge,
-                        color = InkPrimary
-                    )
+                Column {
+                    if (note.type == NoteType.IMAGE && note.images.size > 1) {
+                        OutlinedButton(
+                            onClick = { onDownloadCurrentClicked(pagerState.currentPage) },
+                            shape = RoundedCornerShape(2.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, ChampagneGold),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = InkPrimary
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Download Current",
+                                modifier = Modifier.size(16.dp),
+                                tint = DeepGold
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "COLLECT CURRENT (第 ${pagerState.currentPage + 1} 张) · 仅保存当前图片",
+                                style = EditorialTypography.labelLarge,
+                                color = InkPrimary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+
+                    Button(
+                        onClick = onDownloadClicked,
+                        shape = RoundedCornerShape(2.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ChampagneGold,
+                            contentColor = InkPrimary
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Download",
+                            modifier = Modifier.size(16.dp),
+                            tint = InkPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (note.type == NoteType.VIDEO)
+                                "COLLECT VIDEO · 臻藏无水印视频至相册"
+                            else
+                                "COLLECT ALL (${note.images.size}) · 臻藏全部高清原图",
+                            style = EditorialTypography.labelLarge,
+                            color = InkPrimary
+                        )
+                    }
                 }
             }
 
