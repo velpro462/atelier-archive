@@ -33,17 +33,17 @@ fun EditorialHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "EDITION · NO. 08",
+                text = "EDITION · V1.0.3",
                 style = EditorialTypography.labelSmall,
                 color = InkMuted
             )
             Text(
-                text = "PARIS · SHANGHAI · MILANO",
+                text = "RED · DOUYIN DUAL-PLATFORM",
                 style = EditorialTypography.labelSmall,
                 color = InkMuted
             )
             Text(
-                text = "OCTOBRE · 2026",
+                text = "LOSSLESS EXTRACTOR",
                 style = EditorialTypography.labelSmall,
                 color = InkMuted
             )
@@ -59,10 +59,10 @@ fun EditorialHeader(
             horizontalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "ATELIER",
+                text = "无印",
                 fontFamily = FontFamily.Serif,
                 fontSize = 28.sp,
-                fontWeight = FontWeight.Normal,
+                fontWeight = FontWeight.Bold,
                 letterSpacing = 4.sp,
                 color = InkPrimary
             )
@@ -74,10 +74,10 @@ fun EditorialHeader(
             )
             Spacer(modifier = Modifier.width(10.dp))
             Text(
-                text = "ARCHIVE",
+                text = "原图",
                 fontFamily = FontFamily.Serif,
                 fontSize = 28.sp,
-                fontWeight = FontWeight.Normal,
+                fontWeight = FontWeight.Bold,
                 letterSpacing = 4.sp,
                 color = InkPrimary
             )
@@ -87,7 +87,7 @@ fun EditorialHeader(
 
         // Subhead
         Text(
-            text = "REVUE DES ARCHIVES · 小红书 & 抖音双平台高定无水印原画收藏",
+            text = "MARKFREE · 小红书 & 抖音双平台无水印原图原视提取",
             style = EditorialTypography.labelMedium,
             color = AntiqueBronze,
             textAlign = TextAlign.Center
