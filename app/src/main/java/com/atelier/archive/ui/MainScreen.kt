@@ -243,13 +243,13 @@ fun MainScreen(
                             if (state.note.type == NoteType.VIDEO) {
                                 val videoUrl = state.note.videoUrl
                                 if (!videoUrl.isNullOrBlank()) {
-                                    viewModel.openInspect(videoUrl, true)
+                                    viewModel.openVideoInspect(videoUrl, state.note.platform.code)
                                 } else if (state.note.images.isNotEmpty()) {
-                                    viewModel.openInspect(state.note.images[0], false)
+                                    viewModel.openImagesInspect(state.note.images, 0, state.note.platform.code)
                                 }
                             } else {
-                                if (state.note.images.isNotEmpty() && index in state.note.images.indices) {
-                                    viewModel.openInspect(state.note.images[index], false)
+                                if (state.note.images.isNotEmpty()) {
+                                    viewModel.openImagesInspect(state.note.images, index, state.note.platform.code)
                                 }
                             }
                         },
@@ -285,11 +285,20 @@ fun MainScreen(
             }
         }
 
-        // Full Screen Media Preview Dialog
-        inspectMedia?.let { (url, isVideo) ->
+        // Full Screen Media Preview Dialog with Horizontal Swiping & Direct Saving
+        inspectMedia?.let { inspectState ->
             MediaInspectDialog(
-                mediaUrl = url,
-                isVideo = isVideo,
+                isVideo = inspectState.isVideo,
+                videoUrl = inspectState.videoUrl,
+                images = inspectState.images,
+                initialIndex = inspectState.initialIndex,
+                platform = inspectState.platform,
+                onSaveSingleImage = { pageIndex ->
+                    viewModel.downloadSingleImage(context, pageIndex)
+                },
+                onSaveAllImages = {
+                    viewModel.downloadCurrentMedia(context)
+                },
                 onDismiss = { viewModel.closeInspect() }
             )
         }
