@@ -1,5 +1,6 @@
 package com.atelier.archive.network
 
+import android.content.Context
 import com.atelier.archive.model.NoteDetail
 import com.atelier.archive.model.NoteType
 import com.atelier.archive.model.Platform
@@ -33,81 +34,93 @@ object DouyinParser {
         val restrictionReason: String? = null
     )
 
-    suspend fun parseFromText(rawText: String, customCookie: String = ""): Result<NoteDetail> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val matcher = URL_REGEX.matcher(rawText)
-                if (!matcher.find()) {
-                    throw IllegalArgumentException("NO VALID DOUYIN LINK FOUND / 未检测到有效的抖音链接")
-                }
-                val rawUrl = matcher.group(0) ?: throw IllegalArgumentException("INVALID LINK")
-
-                // Step 1: Follow redirects to find the target item ID
-                val reqBuilder = Request.Builder()
-                    .url(rawUrl)
-                    .header("User-Agent", MOBILE_UA)
-                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                    .header("Referer", "https://www.douyin.com/")
-
-                if (customCookie.isNotBlank()) {
-                    reqBuilder.header("Cookie", customCookie)
-                }
-
-                val response = client.newCall(reqBuilder.build()).execute()
-                val finalUrl = response.request.url.toString()
-                val html = response.body?.string().orEmpty()
-
-                // Extract itemId (e.g. 7659378371922580709)
-                var itemId = ""
-                val idMatcher = ID_REGEX.matcher(finalUrl)
-                if (idMatcher.find()) {
-                    itemId = idMatcher.group(1) ?: ""
-                }
-                if (itemId.isBlank()) {
-                    val digitsMatcher = DIGITS_REGEX.matcher(finalUrl)
-                    if (digitsMatcher.find()) {
-                        itemId = digitsMatcher.group(1) ?: ""
-                    }
-                }
-
-                if (itemId.isBlank()) {
-                    val htmlMatcher = DIGITS_REGEX.matcher(html)
-                    if (htmlMatcher.find()) {
-                        itemId = htmlMatcher.group(1) ?: ""
-                    }
-                }
-
-                if (itemId.isBlank()) {
-                    throw IllegalStateException("FAILED TO RESOLVE DOUYIN ITEM ID / 无法识别抖音作品ID")
-                }
-
-                // Step 2: Try Method A1 (slidesinfo API for photo notes & collections)
-                val slidesResult = tryParseSlidesInfo(itemId, finalUrl, customCookie)
-                if (slidesResult.note != null) {
-                    return@runCatching slidesResult.note
-                }
-
-                // Step 3: Try Method A2 (iteminfo API for video notes)
-                val itemResult = tryParseItemInfo(itemId, finalUrl, customCookie)
-                if (itemResult.note != null) {
-                    return@runCatching itemResult.note
-                }
-
-                // Step 4: Fallback to Method B (HTML RENDER_DATA / SSR)
-                if (html.isNotBlank()) {
-                    val htmlNote = tryParseFromHtml(html, itemId, finalUrl)
-                    if (htmlNote != null) {
-                        return@runCatching htmlNote
-                    }
-                }
-
-                // If restriction was explicitly reported by platform
-                val errorMsg = slidesResult.restrictionReason
-                    ?: itemResult.restrictionReason
-                    ?: "FAILED TO EXTRACT DOUYIN ASSETS (作品可能已删除或隐私不可见)"
-                throw IllegalStateException(errorMsg)
+    suspend fun parseFromText(
+        rawText: String,
+        customCookie: String = "",
+        context: Context? = null
+    ): Result<NoteDetail> = withContext(Dispatchers.IO) {
+        runCatching {
+            val matcher = URL_REGEX.matcher(rawText)
+            if (!matcher.find()) {
+                throw IllegalArgumentException("NO VALID DOUYIN LINK FOUND / 未检测到有效的抖音链接")
             }
+            val rawUrl = matcher.group(0) ?: throw IllegalArgumentException("INVALID LINK")
+
+            // Step 1: Follow redirects to find the target item ID and real URL
+            val reqBuilder = Request.Builder()
+                .url(rawUrl)
+                .header("User-Agent", MOBILE_UA)
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .header("Referer", "https://www.douyin.com/")
+
+            if (customCookie.isNotBlank()) {
+                reqBuilder.header("Cookie", customCookie)
+            }
+
+            val response = client.newCall(reqBuilder.build()).execute()
+            val finalUrl = response.request.url.toString()
+            val html = response.body?.string().orEmpty()
+
+            // Extract itemId (e.g. 7659378371922580709)
+            var itemId = ""
+            val idMatcher = ID_REGEX.matcher(finalUrl)
+            if (idMatcher.find()) {
+                itemId = idMatcher.group(1) ?: ""
+            }
+            if (itemId.isBlank()) {
+                val digitsMatcher = DIGITS_REGEX.matcher(finalUrl)
+                if (digitsMatcher.find()) {
+                    itemId = digitsMatcher.group(1) ?: ""
+                }
+            }
+            if (itemId.isBlank()) {
+                val htmlMatcher = DIGITS_REGEX.matcher(html)
+                if (htmlMatcher.find()) {
+                    itemId = htmlMatcher.group(1) ?: ""
+                }
+            }
+
+            if (itemId.isBlank()) {
+                throw IllegalStateException("FAILED TO RESOLVE DOUYIN ITEM ID / 无法识别抖音作品ID")
+            }
+
+            // Step 2: Try Method A2 (fast API for standard video notes)
+            val itemResult = tryParseItemInfo(itemId, finalUrl, customCookie)
+            if (itemResult.note != null && itemResult.note.type == NoteType.VIDEO) {
+                return@runCatching itemResult.note
+            }
+
+            // Step 3: Try Method A1 (slidesinfo API)
+            val slidesResult = tryParseSlidesInfo(itemId, finalUrl, customCookie)
+            if (slidesResult.note != null) {
+                return@runCatching slidesResult.note
+            }
+
+            // Step 4: Primary resolver for Douyin notes & protected works: Headless WebView
+            if (context != null) {
+                val targetWebUrl = if (itemId.isNotBlank()) {
+                    "https://www.douyin.com/note/$itemId"
+                } else finalUrl
+                val webResult = DouyinWebResolver.resolve(context, targetWebUrl, itemId, customCookie)
+                if (webResult.isSuccess) {
+                    val note = webResult.getOrNull()
+                    if (note != null && (note.images.isNotEmpty() || note.videoUrl != null)) {
+                        return@runCatching note
+                    }
+                }
+            }
+
+            // Step 5: Fallback to Method B (HTML RENDER_DATA / SSR)
+            if (html.isNotBlank()) {
+                val htmlNote = tryParseFromHtml(html, itemId, finalUrl)
+                if (htmlNote != null) {
+                    return@runCatching htmlNote
+                }
+            }
+
+            throw IllegalStateException("FAILED TO EXTRACT DOUYIN ASSETS · 未能成功提取作品原画，请检查网络或在凭证配置中填入 Cookie")
         }
+    }
 
     /**
      * Method A1: Fetch via iesdouyin slidesinfo endpoint (Photo notes / Slides)
@@ -130,26 +143,13 @@ object DouyinParser {
             val jsonStr = resp.body?.string() ?: return ApiParseResult()
             val root = JSONObject(jsonStr)
 
-            // Check filter_list for copyright / download restriction
-            var restriction: String? = null
-            val filterList = root.optJSONArray("filter_list")
-            if (filterList != null && filterList.length() > 0) {
-                val reason = filterList.optJSONObject(0)?.optInt("reason", 0) ?: 0
-                restriction = when (reason) {
-                    8 -> "该抖音作品已被创作者设置了版权/防下载保护，平台禁止第三方提取"
-                    5 -> "该抖音作品已被创作者设为私密，无法公开提取"
-                    10 -> "该抖音作品已被创作者设为仅互关好友可见"
-                    else -> "该抖音作品受到创作者或平台访问限制 (状态码: $reason)"
-                }
-            }
-
             val awemeDetails = root.optJSONArray("aweme_details")
             if (awemeDetails != null && awemeDetails.length() > 0) {
                 val item = awemeDetails.getJSONObject(0)
                 return ApiParseResult(note = parseAwemeItem(item, itemId, finalUrl))
             }
 
-            ApiParseResult(restrictionReason = restriction)
+            ApiParseResult()
         } catch (_: Exception) {
             ApiParseResult()
         }
