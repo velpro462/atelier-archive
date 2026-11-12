@@ -32,7 +32,7 @@ object MediaDownloader {
         noteId: String,
         platform: Platform,
         urls: List<String>,
-        onProgress: (current: Int, total: Int) -> Unit
+        onProgress: (current: Int, total: Int, percent: Float) -> Unit
     ): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
             var successCount = 0
@@ -55,7 +55,8 @@ object MediaDownloader {
                 if (success) {
                     successCount++
                 }
-                onProgress(index + 1, total)
+                val pct = ((index + 1).toFloat() / total).coerceIn(0f, 1f)
+                onProgress(index + 1, total, pct)
             }
 
             if (successCount == 0 && urls.isNotEmpty()) {
@@ -71,10 +72,10 @@ object MediaDownloader {
         platform: Platform,
         url: String,
         pageIndex: Int,
-        onProgress: (current: Int, total: Int) -> Unit
+        onProgress: (bytesRead: Long, totalBytes: Long, percent: Float) -> Unit
     ): Result<Boolean> = withContext(Dispatchers.IO) {
         runCatching {
-            onProgress(0, 1)
+            onProgress(0L, 100L, 0f)
             val referer = if (platform == Platform.XIAOHONGSHU) "https://www.xiaohongshu.com/" else "https://www.douyin.com/"
             val isWebp = url.contains(".webp", ignoreCase = true)
             val ext = if (isWebp) "webp" else "jpg"
@@ -86,9 +87,13 @@ object MediaDownloader {
                 referer = referer,
                 fileName = fileName,
                 mimeType = mime,
-                isImage = true
+                isImage = true,
+                onByteProgress = { read, total ->
+                    val pct = if (total > 0) (read.toFloat() / total).coerceIn(0f, 1f) else 0f
+                    onProgress(read, total, pct)
+                }
             )
-            onProgress(1, 1)
+            onProgress(100L, 100L, 1f)
             if (!success) {
                 throw IllegalStateException("FAILED TO ARCHIVE IMAGE TO GALLERY")
             }
@@ -101,10 +106,10 @@ object MediaDownloader {
         noteId: String,
         platform: Platform,
         url: String,
-        onProgress: (current: Int, total: Int) -> Unit
+        onProgress: (bytesRead: Long, totalBytes: Long, percent: Float) -> Unit
     ): Result<Boolean> = withContext(Dispatchers.IO) {
         runCatching {
-            onProgress(0, 1)
+            onProgress(0L, 100L, 0f)
             val referer = if (platform == Platform.XIAOHONGSHU) "https://www.xiaohongshu.com/" else "https://www.douyin.com/"
             val fileName = "ARCHIVE_VIDEO_${platform.code}_${noteId}_${System.currentTimeMillis()}.mp4"
             val success = downloadStreamToGallery(
@@ -113,9 +118,13 @@ object MediaDownloader {
                 referer = referer,
                 fileName = fileName,
                 mimeType = "video/mp4",
-                isImage = false
+                isImage = false,
+                onByteProgress = { read, total ->
+                    val pct = if (total > 0) (read.toFloat() / total).coerceIn(0f, 1f) else 0f
+                    onProgress(read, total, pct)
+                }
             )
-            onProgress(1, 1)
+            onProgress(100L, 100L, 1f)
             if (!success) {
                 throw IllegalStateException("FAILED TO ARCHIVE VIDEO TO STORAGE")
             }
@@ -129,7 +138,8 @@ object MediaDownloader {
         referer: String,
         fileName: String,
         mimeType: String,
-        isImage: Boolean
+        isImage: Boolean,
+        onByteProgress: ((bytesRead: Long, totalBytes: Long) -> Unit)? = null
     ): Boolean {
         val request = Request.Builder()
             .url(url)
@@ -141,6 +151,7 @@ object MediaDownloader {
         if (!response.isSuccessful) return false
 
         val body = response.body ?: return false
+        val totalBytes = body.contentLength()
         val resolver = context.contentResolver
 
         val collectionUri: Uri = if (isImage) {
@@ -177,7 +188,14 @@ object MediaDownloader {
         return try {
             resolver.openOutputStream(itemUri)?.use { outputStream: OutputStream ->
                 body.byteStream().use { inputStream: InputStream ->
-                    inputStream.copyTo(outputStream)
+                    val buffer = ByteArray(16 * 1024)
+                    var bytesRead: Int
+                    var totalRead: Long = 0
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        outputStream.write(buffer, 0, bytesRead)
+                        totalRead += bytesRead
+                        onByteProgress?.invoke(totalRead, totalBytes)
+                    }
                 }
             }
 
