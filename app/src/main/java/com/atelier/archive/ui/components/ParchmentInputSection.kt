@@ -44,13 +44,13 @@ fun ParchmentInputSection(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "DISPATCH LINK",
+                    text = "分享链接",
                     style = EditorialTypography.labelMedium,
                     color = InkSecondary
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "✦ RED / DOUYIN",
+                    text = "✦ 小红书 / 抖音",
                     style = EditorialTypography.labelSmall,
                     color = DeepGold
                 )
@@ -59,7 +59,7 @@ fun ParchmentInputSection(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (inputUrl.isNotBlank()) {
                     Text(
-                        text = "CLEAR",
+                        text = "清空",
                         style = EditorialTypography.labelSmall,
                         color = InkMuted,
                         modifier = Modifier
@@ -84,7 +84,7 @@ fun ParchmentInputSection(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "PASTE",
+                        text = "粘贴",
                         style = EditorialTypography.labelSmall,
                         color = DeepGold
                     )
