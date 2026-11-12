@@ -33,7 +33,7 @@ fun EditorialHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "EDITION · V1.0.3",
+                text = "EDITION · V1.0.4",
                 style = EditorialTypography.labelSmall,
                 color = InkMuted
             )
