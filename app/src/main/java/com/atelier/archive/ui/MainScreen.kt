@@ -231,9 +231,21 @@ fun MainScreen(
                         note = state.note,
                         downloadState = downloadState,
                         onDownloadClicked = { viewModel.downloadCurrentMedia(context) },
+                        onDownloadCurrentClicked = { pageIndex ->
+                            viewModel.downloadSingleImage(context, pageIndex)
+                        },
                         onImageClicked = { index ->
-                            if (state.note.images.isNotEmpty()) {
-                                viewModel.openInspect(state.note.images[index], false)
+                            if (state.note.type == NoteType.VIDEO) {
+                                val videoUrl = state.note.videoUrl
+                                if (!videoUrl.isNullOrBlank()) {
+                                    viewModel.openInspect(videoUrl, true)
+                                } else if (state.note.images.isNotEmpty()) {
+                                    viewModel.openInspect(state.note.images[0], false)
+                                }
+                            } else {
+                                if (state.note.images.isNotEmpty() && index in state.note.images.indices) {
+                                    viewModel.openInspect(state.note.images[index], false)
+                                }
                             }
                         },
                         modifier = Modifier.padding(horizontal = 20.dp)
