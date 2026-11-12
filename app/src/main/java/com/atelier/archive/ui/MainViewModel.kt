@@ -95,6 +95,34 @@ class MainViewModel : ViewModel() {
         }
     }
 
+    fun downloadSingleImage(context: Context, pageIndex: Int) {
+        val state = _parseState.value
+        if (state !is ParseState.Success) return
+
+        val note = state.note
+        if (pageIndex !in note.images.indices) return
+
+        _downloadState.value = DownloadState.Progress(0, 1)
+
+        viewModelScope.launch {
+            val result = MediaDownloader.downloadSingleImage(
+                context = context,
+                noteId = note.id,
+                platform = note.platform,
+                url = note.images[pageIndex],
+                pageIndex = pageIndex,
+                onProgress = { cur, tot ->
+                    _downloadState.value = DownloadState.Progress(cur, tot)
+                }
+            )
+            result.onSuccess {
+                _downloadState.value = DownloadState.Success(1)
+            }.onFailure {
+                _downloadState.value = DownloadState.Error(it.localizedMessage ?: "DOWNLOAD FAILED")
+            }
+        }
+    }
+
     fun downloadCurrentMedia(context: Context) {
         val state = _parseState.value
         if (state !is ParseState.Success) return
