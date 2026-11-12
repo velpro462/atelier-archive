@@ -26,19 +26,21 @@ object DouyinWebResolver {
     private const val DESKTOP_UA =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
-    private const val EXTRACT_JS = """
+    private fun buildExtractJs(isExplicitNote: Boolean): String = """
         (() => {
             try {
+                const isExplicitNote = $isExplicitNote;
+
                 // 1. Cycle slide transitions to trigger hydration of all lazy slides
                 try {
                     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, bubbles: true }));
-                    const nextArrow = document.querySelector('.basePlayerContainer [class*="arrow-right"], .basePlayerContainer [class*="next"], [class*="dySwiper"] [class*="arrow"]');
+                    const nextArrow = document.querySelector('.basePlayerContainer [class*="arrow-right"], .basePlayerContainer [class*="next"], [class*="dySwiper"] [class*="arrow"], [class*="slider"] [class*="arrow"]');
                     if (nextArrow) nextArrow.click();
                 } catch(e) {}
 
                 // 2. Title
                 let title = (document.title || '').replace(/ - 抖音${'$'}/, '').trim();
-                const h1 = document.querySelector('h1');
+                const h1 = document.querySelector('h1, [data-e2e="detail-title"], .title');
                 if (h1 && h1.innerText && h1.innerText.trim().length > 0) {
                     title = h1.innerText.trim();
                 }
@@ -65,8 +67,8 @@ object DouyinWebResolver {
                 }
 
                 // 6. Genuine Aweme note slides only
-                // Query player/swiper containers first, fall back to global
-                const sliderImgs = Array.from(document.querySelectorAll('.basePlayerContainer img, .dySwiperSlide img, [class*="basePlayer"] img, [class*="swiper"] img, [class*="slider"] img'));
+                // Query player/swiper containers first
+                const sliderImgs = Array.from(document.querySelectorAll('.basePlayerContainer img, .slider-video img, .dySwiperSlide img, [class*="basePlayer"] img, [class*="swiper"] img, [class*="slider"] img'));
                 const candidateEls = sliderImgs.length > 0 ? sliderImgs : Array.from(document.querySelectorAll('img'));
 
                 const images = [];
@@ -85,7 +87,9 @@ object DouyinWebResolver {
                     // Whitelist: Must match genuine Douyin note slide parameters
                     const isAwemeSlide = src.includes('tplv-dy-aweme-images') ||
                                          src.includes('biz_tag=aweme_images') ||
-                                         src.includes('PackSourceEnum_AWEME_DETAIL');
+                                         src.includes('PackSourceEnum_AWEME_DETAIL') ||
+                                         src.includes('tos-cn-i-0813') ||
+                                         src.includes('~tplv-dy');
 
                     if (isAwemeSlide) {
                         const m = src.match(/tos-cn[^\/~?]+/);
@@ -97,21 +101,34 @@ object DouyinWebResolver {
                     }
                 }
 
-                // 7. Video
+                // 7. Video extraction: STRICTLY ignore if explicit note, and NEVER match hidden xg-video or sidebar recommendation videos
                 let videoUrl = '';
-                const videoEl = document.querySelector('video');
-                if (videoEl) {
-                    videoUrl = videoEl.currentSrc || videoEl.src || '';
+                if (!isExplicitNote) {
+                    const videoEl = document.querySelector('.basePlayerContainer video, [data-e2e="feed-video"] video');
+                    if (videoEl && !videoEl.closest('.hideXgVideo') && !videoEl.closest('[class*="recommend"]')) {
+                        const vSrc = videoEl.currentSrc || videoEl.src || '';
+                        if (vSrc.startsWith('http') && !vSrc.includes('empty')) {
+                            videoUrl = vSrc;
+                        }
+                    }
                 }
 
                 // 8. Ready condition
                 let pageReady = false;
-                if (totalExpected > 0 && images.length >= totalExpected) {
-                    pageReady = true;
-                } else if (images.length > 0 && !videoUrl) {
-                    pageReady = true;
-                } else if (videoUrl.length > 0 && images.length === 0) {
-                    pageReady = true;
+                if (isExplicitNote) {
+                    if (totalExpected > 0 && images.length >= totalExpected) {
+                        pageReady = true;
+                    } else if (images.length > 0) {
+                        pageReady = true;
+                    }
+                } else {
+                    if (totalExpected > 0 && images.length >= totalExpected) {
+                        pageReady = true;
+                    } else if (images.length > 0 && !videoUrl) {
+                        pageReady = true;
+                    } else if (videoUrl.length > 0 && images.length === 0) {
+                        pageReady = true;
+                    }
                 }
 
                 return JSON.stringify({
@@ -127,14 +144,15 @@ object DouyinWebResolver {
                 return JSON.stringify({ error: e.toString(), pageReady: false });
             }
         })()
-    """
+    """.trimIndent()
 
     @SuppressLint("SetJavaScriptEnabled")
     suspend fun resolve(
         context: Context,
         targetUrl: String,
         itemId: String = "",
-        customCookie: String = ""
+        customCookie: String = "",
+        isExplicitNote: Boolean = false
     ): Result<NoteDetail> = withContext(Dispatchers.Main) {
         suspendCancellableCoroutine { continuation ->
             val isCompleted = AtomicBoolean(false)
@@ -178,8 +196,10 @@ object DouyinWebResolver {
 
             // Set up timeout (9 seconds)
             handler.postDelayed({
-                if (accumulatedImages.isNotEmpty() || bestVideo.isNotBlank()) {
-                    val isVideo = bestVideo.isNotBlank() && accumulatedImages.isEmpty()
+                val hasImages = accumulatedImages.isNotEmpty()
+                val hasVid = !isExplicitNote && bestVideo.isNotBlank()
+                if (hasImages || hasVid) {
+                    val isVideo = hasVid && !hasImages
                     val detail = NoteDetail(
                         id = itemId.ifBlank { "douyin_${System.currentTimeMillis()}" },
                         title = bestTitle.ifBlank { "UNTITLED DOUYIN WORK · 抖音作品" },
@@ -220,9 +240,11 @@ object DouyinWebResolver {
                     cookieManager.setCookie("https://www.douyin.com", customCookie)
                 }
 
+                val extractJs = buildExtractJs(isExplicitNote)
+
                 fun evaluatePage() {
                     if (isCompleted.get()) return
-                    wv.evaluateJavascript(EXTRACT_JS) { resultJson ->
+                    wv.evaluateJavascript(extractJs) { resultJson ->
                         if (isCompleted.get() || resultJson.isNullOrBlank() || resultJson == "null") return@evaluateJavascript
                         try {
                             val unescaped = if (resultJson.startsWith("\"") && resultJson.endsWith("\"")) {
@@ -233,7 +255,7 @@ object DouyinWebResolver {
                             val obj = JSONObject(unescaped)
                             val pageReady = obj.optBoolean("pageReady", false)
                             val imagesArr = obj.optJSONArray("images")
-                            val videoUrl = obj.optString("videoUrl", "")
+                            val videoUrl = if (!isExplicitNote) obj.optString("videoUrl", "") else ""
                             val totalExpected = obj.optInt("totalExpected", 0)
                             if (totalExpected > 0) expectedCount = totalExpected
 
@@ -249,7 +271,7 @@ object DouyinWebResolver {
                             if (avatar.isNotBlank() && bestAvatar.isBlank()) {
                                 bestAvatar = avatar
                             }
-                            if (videoUrl.isNotBlank() && bestVideo.isBlank()) {
+                            if (videoUrl.isNotBlank() && bestVideo.isBlank() && !isExplicitNote) {
                                 bestVideo = videoUrl
                             }
 
@@ -264,11 +286,11 @@ object DouyinWebResolver {
 
                             val elapsedMs = System.currentTimeMillis() - startTime
                             val hasAllExpectedImages = expectedCount > 0 && accumulatedImages.size >= expectedCount
-                            val hasVideo = bestVideo.isNotBlank() && accumulatedImages.isEmpty() && elapsedMs > 1200
+                            val hasVideo = !isExplicitNote && bestVideo.isNotBlank() && accumulatedImages.isEmpty() && elapsedMs > 2500
                             val hasTimedImages = elapsedMs > 2500 && accumulatedImages.isNotEmpty()
 
                             if (hasAllExpectedImages || hasVideo || hasTimedImages || (pageReady && accumulatedImages.isNotEmpty() && expectedCount == 0)) {
-                                val isVideo = bestVideo.isNotBlank() && accumulatedImages.isEmpty()
+                                val isVideo = !isExplicitNote && bestVideo.isNotBlank() && accumulatedImages.isEmpty()
                                 val finalTitle = bestTitle.ifBlank { "UNTITLED DOUYIN WORK · 抖音作品" }
                                 val finalAuthor = bestAuthor.ifBlank { "DOUYIN CREATOR" }
 
