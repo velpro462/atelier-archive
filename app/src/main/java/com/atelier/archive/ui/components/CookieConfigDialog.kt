@@ -34,15 +34,32 @@ fun CookieConfigDialog(
                 .padding(20.dp)
         ) {
             Text(
-                text = "SECURITY DISCIPLINE / 凭证配置",
+                text = "凭证配置 (可选)",
                 style = EditorialTypography.labelLarge,
                 color = InkPrimary
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Prominent reassurance tip
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(ChampagneGold.copy(alpha = 0.12f), RoundedCornerShape(2.dp))
+                    .border(0.6.dp, ChampagneGold.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "💡 提示：普通情况不用配置这个东西，直接复制链接提取即可。",
+                    style = EditorialTypography.bodyMedium,
+                    color = AntiqueBronze
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = "若遇到平台人机验证，可填入小红书网页端登录 Cookie (例如包含 a1, web_session 等参数) 增强解析成功率。",
-                style = EditorialTypography.bodyMedium,
-                color = InkSecondary
+                text = "仅当极少数作品设置为仅好友可见或遇到平台验证码时，才需填入网页端 Cookie 进行授权。",
+                style = EditorialTypography.labelSmall,
+                color = InkMuted
             )
 
             Spacer(modifier = Modifier.height(14.dp))
