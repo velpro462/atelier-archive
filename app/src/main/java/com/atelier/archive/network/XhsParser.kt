@@ -92,7 +92,7 @@ object XhsParser {
                 }
 
                 if (mobileNote != null) {
-                    return@runCatching parseMobileNote(mobileNote, finalUrl)
+                    return@runCatching parseMobileNote(mobileNote, finalUrl, sanitizedJson)
                 }
 
                 // Try Branch 2: Desktop SSR template (note -> noteDetailMap -> noteId -> note)
@@ -105,7 +105,7 @@ object XhsParser {
                         val noteWrapper = noteDetailMap.optJSONObject(noteId)
                         val note = noteWrapper?.optJSONObject("note")
                         if (note != null) {
-                            return@runCatching parseDesktopNote(note, noteId, finalUrl)
+                            return@runCatching parseDesktopNote(note, noteId, finalUrl, sanitizedJson)
                         }
                     }
                 }
@@ -114,7 +114,7 @@ object XhsParser {
             }
         }
 
-    private fun parseMobileNote(note: JSONObject, finalUrl: String): NoteDetail {
+    private fun parseMobileNote(note: JSONObject, finalUrl: String, rawJson: String? = null): NoteDetail {
         val noteId = note.optString("noteId", "")
         val title = note.optString("title", "").ifBlank { "UNTITLED NOTE" }
         val desc = note.optString("desc", "")
@@ -140,16 +140,7 @@ object XhsParser {
         var videoUrl: String? = null
 
         if (isVideo) {
-            val videoObj = note.optJSONObject("video")
-            val mediaObj = videoObj?.optJSONObject("media")
-            val streamObj = mediaObj?.optJSONObject("stream")
-            val h264Arr = streamObj?.optJSONArray("h264")
-            val h265Arr = streamObj?.optJSONArray("h265")
-            val rawVideo = h264Arr?.optJSONObject(0)?.optString("masterUrl")
-                ?: h265Arr?.optJSONObject(0)?.optString("masterUrl")
-                ?: videoObj?.optString("src")
-                ?: videoObj?.optString("url")
-            videoUrl = if (!rawVideo.isNullOrBlank()) ensureHttps(rawVideo) else null
+            videoUrl = extractCleanVideoUrl(note, rawJson)
 
             val imageList = note.optJSONArray("imageList")
             if (imageList != null && imageList.length() > 0) {
@@ -184,7 +175,7 @@ object XhsParser {
         )
     }
 
-    private fun parseDesktopNote(note: JSONObject, noteId: String, finalUrl: String): NoteDetail {
+    private fun parseDesktopNote(note: JSONObject, noteId: String, finalUrl: String, rawJson: String? = null): NoteDetail {
         val title = note.optString("title", "").ifBlank { "UNTITLED NOTE" }
         val desc = note.optString("desc", "")
         val typeStr = note.optString("type", "normal")
@@ -207,16 +198,7 @@ object XhsParser {
         var videoUrl: String? = null
 
         if (isVideo) {
-            val videoObj = note.optJSONObject("video")
-            val mediaObj = videoObj?.optJSONObject("media")
-            val streamObj = mediaObj?.optJSONObject("stream")
-            val h264Arr = streamObj?.optJSONArray("h264")
-            val h265Arr = streamObj?.optJSONArray("h265")
-            val rawVideo = h264Arr?.optJSONObject(0)?.optString("masterUrl")
-                ?: h265Arr?.optJSONObject(0)?.optString("masterUrl")
-                ?: videoObj?.optString("src")
-                ?: videoObj?.optString("url")
-            videoUrl = if (!rawVideo.isNullOrBlank()) ensureHttps(rawVideo) else null
+            videoUrl = extractCleanVideoUrl(note, rawJson)
 
             val imageList = note.optJSONArray("imageList")
             if (imageList != null && imageList.length() > 0) {
@@ -249,6 +231,67 @@ object XhsParser {
             shareUrl = finalUrl,
             tags = tagList
         )
+    }
+
+    private fun extractCleanVideoUrl(note: JSONObject, rawJson: String? = null): String? {
+        val videoObj = note.optJSONObject("video")
+
+        // Priority 1: Direct uncompressed original master video key uploaded by creator (100% watermark-free)
+        val originKey = videoObj?.optJSONObject("consumer")?.optString("originVideoKey")?.takeIf { it.isNotBlank() }
+            ?: videoObj?.optString("originVideoKey")?.takeIf { it.isNotBlank() }
+            ?: videoObj?.optJSONObject("media")?.optString("originVideoKey")?.takeIf { it.isNotBlank() }
+            ?: rawJson?.let {
+                val m = Pattern.compile("\"originVideoKey\"\\s*:\\s*\"([^\"]+)\"").matcher(it)
+                if (m.find()) m.group(1) else null
+            }
+
+        if (!originKey.isNullOrBlank()) {
+            val cleanKey = originKey.removePrefix("/")
+            return "https://sns-video-bd.xhscdn.com/$cleanKey"
+        }
+
+        // Priority 2: Filter stream list to prioritize non-watermarked streams
+        val mediaObj = videoObj?.optJSONObject("media")
+        val streamObj = mediaObj?.optJSONObject("stream")
+        val streamCandidates = mutableListOf<JSONObject>()
+
+        fun addStreams(arr: org.json.JSONArray?) {
+            if (arr != null) {
+                for (i in 0 until arr.length()) {
+                    arr.optJSONObject(i)?.let { streamCandidates.add(it) }
+                }
+            }
+        }
+        addStreams(streamObj?.optJSONArray("h264"))
+        addStreams(streamObj?.optJSONArray("h265"))
+        addStreams(streamObj?.optJSONArray("av1"))
+
+        // Look for stream without "wm" or "watermark" in streamDesc, qualityType, etc.
+        val cleanStream = streamCandidates.firstOrNull { s ->
+            val desc = s.optString("streamDesc", "")
+            val quality = s.optString("qualityType", "")
+            val format = s.optString("format", "")
+            !desc.contains("wm", ignoreCase = true) &&
+            !desc.contains("watermark", ignoreCase = true) &&
+            !quality.contains("wm", ignoreCase = true) &&
+            !format.contains("wm", ignoreCase = true) &&
+            !s.optBoolean("watermark", false)
+        }
+
+        if (cleanStream != null) {
+            val cleanUrl = cleanStream.optString("masterUrl").takeIf { it.isNotBlank() }
+                ?: cleanStream.optJSONArray("backupUrls")?.optString(0)?.takeIf { it.isNotBlank() }
+            if (!cleanUrl.isNullOrBlank()) {
+                return ensureHttps(cleanUrl)
+            }
+        }
+
+        // Priority 3: Fallback to any masterUrl or video source
+        val fallback = streamCandidates.firstOrNull()?.optString("masterUrl")?.takeIf { it.isNotBlank() }
+            ?: videoObj?.optString("src")?.takeIf { it.isNotBlank() }
+            ?: videoObj?.optString("url")?.takeIf { it.isNotBlank() }
+
+        return fallback?.let { ensureHttps(it) }
     }
 
     private fun extractCleanImageUrl(imgObj: JSONObject): String {
