@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.atelier.archive.data.HistoryManager
 import com.atelier.archive.model.DownloadState
 import com.atelier.archive.model.HistoryItem
+import com.atelier.archive.model.InspectState
 import com.atelier.archive.model.NoteType
 import com.atelier.archive.model.ParseState
 import com.atelier.archive.network.ArchiveDispatcher
@@ -32,7 +33,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _detectedClipboardUrl = MutableStateFlow<String?>(null)
     val detectedClipboardUrl = _detectedClipboardUrl.asStateFlow()
 
-    private val _inspectMedia = MutableStateFlow<Pair<String, Boolean>?>(null)
+    private val _inspectMedia = MutableStateFlow<InspectState?>(null)
     val inspectMedia = _inspectMedia.asStateFlow()
 
     private val _isSettingsOpen = MutableStateFlow(false)
@@ -101,8 +102,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _customCookie.value = cookie
     }
 
-    fun openInspect(url: String, isVideo: Boolean) {
-        _inspectMedia.value = Pair(url, isVideo)
+    fun openVideoInspect(url: String, platform: String = "") {
+        _inspectMedia.value = InspectState(
+            isVideo = true,
+            videoUrl = url,
+            platform = platform
+        )
+    }
+
+    fun openImagesInspect(images: List<String>, initialIndex: Int = 0, platform: String = "") {
+        _inspectMedia.value = InspectState(
+            isVideo = false,
+            images = images,
+            initialIndex = initialIndex,
+            platform = platform
+        )
     }
 
     fun closeInspect() {
