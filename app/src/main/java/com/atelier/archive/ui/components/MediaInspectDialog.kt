@@ -1,10 +1,7 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-
 package com.atelier.archive.ui.components
 
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import androidx.annotation.OptIn
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -48,7 +45,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-@OptIn(UnstableApi::class)
+@kotlin.OptIn(UnstableApi::class)
 @Composable
 fun MediaInspectDialog(
     isVideo: Boolean,
@@ -88,7 +85,7 @@ fun MediaInspectDialog(
     }
 }
 
-@OptIn(UnstableApi::class)
+@kotlin.OptIn(UnstableApi::class)
 @Composable
 private fun VideoPreviewPlayer(
     videoUrl: String,
