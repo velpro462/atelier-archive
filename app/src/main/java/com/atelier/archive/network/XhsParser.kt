@@ -26,10 +26,6 @@ object XhsParser {
     private val URL_REGEX = Pattern.compile("https?://[a-zA-Z0-9.\\-_/]+")
     private val STATE_REGEX = Pattern.compile("window\\.__INITIAL_STATE__\\s*=\\s*(\\{.+?\\})\\s*</script>", Pattern.DOTALL)
 
-    /**
-     * Extracts share link from messy user text, resolves redirects,
-     * extracts SSR data and constructs NoteDetail.
-     */
     suspend fun parseFromText(rawText: String, customCookie: String = ""): Result<NoteDetail> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -64,7 +60,6 @@ object XhsParser {
                 val jsonString = if (stateMatcher.find()) {
                     stateMatcher.group(1)
                 } else {
-                    // Fallback substring extraction in case of trailing regex mismatch
                     val marker = "window.__INITIAL_STATE__="
                     val startIdx = html.indexOf(marker)
                     if (startIdx != -1) {
@@ -75,7 +70,6 @@ object XhsParser {
                     } else null
                 } ?: throw IllegalStateException("FAILED TO LOCATE SSR DATA (反爬验证或笔记已下架)")
 
-                // Sanitize JS undefined to JSON null
                 val sanitizedJson = jsonString
                     .replace(":undefined", ":null")
                     .replace(": undefined", ": null")
@@ -124,12 +118,10 @@ object XhsParser {
                     val h264Arr = streamObj?.optJSONArray("h264")
                     val h265Arr = streamObj?.optJSONArray("h265")
 
-                    // Pick highest resolution / masterUrl
                     val firstH264 = h264Arr?.optJSONObject(0)?.optString("masterUrl")
                     val firstH265 = h265Arr?.optJSONObject(0)?.optString("masterUrl")
                     videoUrl = firstH264 ?: firstH265
 
-                    // Video cover image
                     val imageList = note.optJSONArray("imageList")
                     if (imageList != null && imageList.length() > 0) {
                         val cover = extractCleanImageUrl(imageList.getJSONObject(0))
@@ -164,23 +156,35 @@ object XhsParser {
             }
         }
 
-    /**
-     * Extracts unwatermarked, lossless original image URL from JSON object
-     */
     private fun extractCleanImageUrl(imgObj: JSONObject): String {
+        // 1. Prefer urlDefault directly (keeps signed CDN signature intact)
+        val urlDefault = imgObj.optString("urlDefault", "")
+        if (urlDefault.isNotBlank()) {
+            return ensureHttps(urlDefault)
+        }
+
+        // 2. Check infoList array
         val infoList = imgObj.optJSONArray("infoList")
         if (infoList != null && infoList.length() > 0) {
-            val primaryUrl = infoList.getJSONObject(0).optString("url")
-            if (primaryUrl.isNotBlank()) {
-                return sanitizeCdnUrl(primaryUrl)
+            var candidate = ""
+            for (i in 0 until infoList.length()) {
+                val item = infoList.optJSONObject(i) ?: continue
+                val scene = item.optString("imageScene")
+                val u = item.optString("url")
+                if (scene == "WB_DFT" && u.isNotBlank()) {
+                    candidate = u
+                    break
+                }
+                if (candidate.isBlank() && u.isNotBlank()) {
+                    candidate = u
+                }
+            }
+            if (candidate.isNotBlank()) {
+                return ensureHttps(candidate)
             }
         }
 
-        val urlDefault = imgObj.optString("urlDefault", "")
-        if (urlDefault.isNotBlank()) {
-            return sanitizeCdnUrl(urlDefault)
-        }
-
+        // 3. Fallback traceId
         val traceId = imgObj.optString("traceId", "")
         if (traceId.isNotBlank()) {
             return "https://sns-webpic-qc.xhscdn.com/265/$traceId"
@@ -189,16 +193,10 @@ object XhsParser {
         return ""
     }
 
-    private fun sanitizeCdnUrl(url: String): String {
+    private fun ensureHttps(url: String): String {
         var clean = url.trim()
         if (clean.startsWith("http://")) {
             clean = "https://" + clean.substring(7)
-        }
-        if (clean.contains("!")) {
-            val base = clean.substringBefore("!")
-            if (base.contains("xhscdn.com")) {
-                clean = base
-            }
         }
         return clean
     }
