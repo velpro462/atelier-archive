@@ -1,5 +1,6 @@
 package com.atelier.archive.network
 
+import android.content.Context
 import com.atelier.archive.model.NoteDetail
 import com.atelier.archive.model.Platform
 
@@ -14,14 +15,18 @@ object ArchiveDispatcher {
         }
     }
 
-    suspend fun parse(rawText: String, customCookie: String = ""): Result<NoteDetail> {
+    suspend fun parse(
+        rawText: String,
+        customCookie: String = "",
+        context: Context? = null
+    ): Result<NoteDetail> {
         val platform = detectPlatform(rawText)
             ?: return Result.failure(
                 IllegalArgumentException("UNSUPPORTED DISPATCH LINK · 请输入有效的小红书或抖音分享链接")
             )
 
         return when (platform) {
-            Platform.DOUYIN -> DouyinParser.parseFromText(rawText, customCookie)
+            Platform.DOUYIN -> DouyinParser.parseFromText(rawText, customCookie, context)
             Platform.XIAOHONGSHU -> XhsParser.parseFromText(rawText, customCookie)
         }
     }
