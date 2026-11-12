@@ -109,7 +109,7 @@ fun HistoryDialog(
                                 Text(
                                     text = "清空",
                                     style = EditorialTypography.labelMedium,
-                                    color = RustAccent,
+                                    color = WaxSealBurgundy,
                                     modifier = Modifier
                                         .clickable { onClearAll() }
                                         .padding(horizontal = 8.dp, vertical = 6.dp)
