@@ -84,10 +84,18 @@ object DouyinParser {
                 throw IllegalStateException("FAILED TO RESOLVE DOUYIN ITEM ID / 无法识别抖音作品ID")
             }
 
+            // Check if explicitly a photo note
+            val isExplicitNote = rawText.contains("图文") ||
+                    finalUrl.contains("/note/") ||
+                    rawUrl.contains("/note/")
+
             // Step 2: Try Method A2 (fast API for standard video notes)
-            val itemResult = tryParseItemInfo(itemId, finalUrl, customCookie)
-            if (itemResult.note != null && itemResult.note.type == NoteType.VIDEO) {
-                return@runCatching itemResult.note
+            // If explicit note, do NOT accept video from iteminfo API!
+            if (!isExplicitNote) {
+                val itemResult = tryParseItemInfo(itemId, finalUrl, customCookie)
+                if (itemResult.note != null && itemResult.note.type == NoteType.VIDEO) {
+                    return@runCatching itemResult.note
+                }
             }
 
             // Step 3: Try Method A1 (slidesinfo API)
@@ -101,10 +109,10 @@ object DouyinParser {
                 val targetWebUrl = if (itemId.isNotBlank()) {
                     if (finalUrl.contains("/video/")) "https://www.douyin.com/video/$itemId" else "https://www.douyin.com/note/$itemId"
                 } else finalUrl
-                val webResult = DouyinWebResolver.resolve(context, targetWebUrl, itemId, customCookie)
+                val webResult = DouyinWebResolver.resolve(context, targetWebUrl, itemId, customCookie, isExplicitNote = isExplicitNote)
                 if (webResult.isSuccess) {
                     val note = webResult.getOrNull()
-                    if (note != null && (note.images.isNotEmpty() || note.videoUrl != null)) {
+                    if (note != null && (note.images.isNotEmpty() || (!isExplicitNote && note.videoUrl != null))) {
                         return@runCatching note
                     }
                 }
@@ -114,7 +122,9 @@ object DouyinParser {
             if (html.isNotBlank()) {
                 val htmlNote = tryParseFromHtml(html, itemId, finalUrl)
                 if (htmlNote != null) {
-                    return@runCatching htmlNote
+                    if (!isExplicitNote || htmlNote.type == NoteType.IMAGE) {
+                        return@runCatching htmlNote
+                    }
                 }
             }
 
@@ -249,21 +259,16 @@ object DouyinParser {
             val videoObj = item.optJSONObject("video")
             val playAddr = videoObj?.optJSONObject("play_addr")
             val urlList = playAddr?.optJSONArray("url_list")
-
-            val rawPlayUrl = urlList?.optString(0).orEmpty()
-            if (rawPlayUrl.isNotBlank()) {
-                val cleanPlayUrl = rawPlayUrl.replace("playwm", "play")
-                val direct = resolveDirectVideoCdnUrl(cleanPlayUrl)
-                videoUrl = ensureHttps(direct)
-            }
-
-            // Cover image
-            val coverUrl = videoObj?.optJSONObject("cover")
-                ?.optJSONArray("url_list")?.optString(0).orEmpty()
-            if (coverUrl.isNotBlank()) {
-                images.add(ensureHttps(coverUrl))
+            if (urlList != null && urlList.length() > 0) {
+                var bestUrl = urlList.optString(0)
+                if (bestUrl.contains("playwm")) {
+                    bestUrl = bestUrl.replace("playwm", "play")
+                }
+                videoUrl = ensureHttps(bestUrl)
             }
         }
+
+        val type = if (isPhotoNote) NoteType.IMAGE else NoteType.VIDEO
 
         return NoteDetail(
             id = itemId,
@@ -272,34 +277,19 @@ object DouyinParser {
             authorName = authorName,
             authorAvatar = authorAvatar,
             platform = Platform.DOUYIN,
-            type = if (isPhotoNote) NoteType.IMAGE else NoteType.VIDEO,
+            type = type,
             images = images,
             videoUrl = videoUrl,
             shareUrl = finalUrl,
-            tags = listOf("DOUYIN", if (isPhotoNote) "PHOTO" else "VIDEO")
+            tags = emptyList()
         )
     }
 
-    private fun resolveDirectVideoCdnUrl(playUrl: String): String {
-        return try {
-            val req = Request.Builder()
-                .url(playUrl)
-                .header("User-Agent", MOBILE_UA)
-                .header("Referer", "https://www.douyin.com/")
-                .build()
-
-            val resp = client.newCall(req).execute()
-            resp.request.url.toString()
-        } catch (_: Exception) {
-            playUrl
-        }
-    }
-
     private fun ensureHttps(url: String): String {
-        return if (url.startsWith("http://")) {
-            url.replaceFirst("http://", "https://")
-        } else {
-            url
+        return when {
+            url.startsWith("//") -> "https:$url"
+            url.startsWith("http://") -> url.replaceFirst("http://", "https://")
+            else -> url
         }
     }
 }
