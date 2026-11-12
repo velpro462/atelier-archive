@@ -8,8 +8,8 @@ object ArchiveDispatcher {
     fun detectPlatform(text: String): Platform? {
         val lower = text.lowercase()
         return when {
-            lower.contains("douyin.com") || lower.contains("iesdouyin.com") -> Platform.DOUYIN
-            lower.contains("xhslink.com") || lower.contains("xiaohongshu.com") -> Platform.XIAOHONGSHU
+            lower.contains("douyin") || lower.contains("iesdouyin") -> Platform.DOUYIN
+            lower.contains("xhslink") || lower.contains("xiaohongshu") -> Platform.XIAOHONGSHU
             else -> null
         }
     }
