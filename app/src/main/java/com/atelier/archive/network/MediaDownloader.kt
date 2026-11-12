@@ -40,13 +40,16 @@ object MediaDownloader {
             val referer = if (platform == Platform.XIAOHONGSHU) "https://www.xiaohongshu.com/" else "https://www.douyin.com/"
 
             urls.forEachIndexed { index, url ->
-                val fileName = "ARCHIVE_${platform.code}_${noteId}_${index + 1}_${System.currentTimeMillis()}.jpg"
+                val isWebp = url.contains(".webp", ignoreCase = true)
+                val ext = if (isWebp) "webp" else "jpg"
+                val mime = if (isWebp) "image/webp" else "image/jpeg"
+                val fileName = "ARCHIVE_${platform.code}_${noteId}_${index + 1}_${System.currentTimeMillis()}.$ext"
                 val success = downloadStreamToGallery(
                     context = context,
                     url = url,
                     referer = referer,
                     fileName = fileName,
-                    mimeType = "image/jpeg",
+                    mimeType = mime,
                     isImage = true
                 )
                 if (success) {
@@ -73,13 +76,16 @@ object MediaDownloader {
         runCatching {
             onProgress(0, 1)
             val referer = if (platform == Platform.XIAOHONGSHU) "https://www.xiaohongshu.com/" else "https://www.douyin.com/"
-            val fileName = "ARCHIVE_${platform.code}_${noteId}_p${pageIndex + 1}_${System.currentTimeMillis()}.jpg"
+            val isWebp = url.contains(".webp", ignoreCase = true)
+            val ext = if (isWebp) "webp" else "jpg"
+            val mime = if (isWebp) "image/webp" else "image/jpeg"
+            val fileName = "ARCHIVE_${platform.code}_${noteId}_p${pageIndex + 1}_${System.currentTimeMillis()}.$ext"
             val success = downloadStreamToGallery(
                 context = context,
                 url = url,
                 referer = referer,
                 fileName = fileName,
-                mimeType = "image/jpeg",
+                mimeType = mime,
                 isImage = true
             )
             onProgress(1, 1)
