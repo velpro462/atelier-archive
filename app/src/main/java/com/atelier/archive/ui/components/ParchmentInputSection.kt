@@ -45,47 +45,56 @@ fun ParchmentInputSection(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "分享链接",
-                    style = EditorialTypography.labelMedium,
-                    color = InkSecondary
+                    style = EditorialTypography.titleMedium.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                    color = InkPrimary
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "✦ 小红书 / 抖音",
-                    style = EditorialTypography.labelSmall,
+                    style = EditorialTypography.labelMedium,
                     color = DeepGold
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 if (inputUrl.isNotBlank()) {
-                    Text(
-                        text = "清空",
-                        style = EditorialTypography.labelSmall,
-                        color = InkMuted,
+                    Box(
                         modifier = Modifier
                             .clickable(onClick = onClearClicked)
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    )
+                            .background(ParchmentBase, RoundedCornerShape(3.dp))
+                            .border(0.6.dp, HairlineBorder, RoundedCornerShape(3.dp))
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "清空",
+                            style = EditorialTypography.labelLarge.copy(fontSize = 13.sp),
+                            color = InkMuted
+                        )
+                    }
                 }
 
                 Row(
                     modifier = Modifier
                         .clickable(onClick = onPasteClicked)
-                        .background(ParchmentBase, RoundedCornerShape(2.dp))
-                        .border(0.5.dp, ChampagneGold, RoundedCornerShape(2.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        .background(ParchmentBase, RoundedCornerShape(3.dp))
+                        .border(0.8.dp, ChampagneGold, RoundedCornerShape(3.dp))
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.ContentPaste,
                         contentDescription = "Paste",
                         tint = DeepGold,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "粘贴",
-                        style = EditorialTypography.labelSmall,
+                        style = EditorialTypography.labelLarge.copy(fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
                         color = DeepGold
                     )
                 }
