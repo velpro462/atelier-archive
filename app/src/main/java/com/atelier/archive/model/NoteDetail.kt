@@ -33,7 +33,26 @@ sealed interface ParseState {
 
 sealed interface DownloadState {
     object Idle : DownloadState
-    data class Progress(val current: Int, val total: Int) : DownloadState
+    data class Progress(
+        val current: Int,
+        val total: Int,
+        val bytesDownloaded: Long = 0L,
+        val totalBytes: Long = 0L,
+        val percent: Float = 0f
+    ) : DownloadState
     data class Success(val count: Int) : DownloadState
     data class Error(val message: String) : DownloadState
 }
+
+data class HistoryItem(
+    val id: String,
+    val title: String,
+    val authorName: String,
+    val authorAvatar: String,
+    val platform: Platform,
+    val type: NoteType,
+    val coverUrl: String,
+    val shareUrl: String,
+    val itemCount: Int,
+    val timestamp: Long = System.currentTimeMillis()
+)
