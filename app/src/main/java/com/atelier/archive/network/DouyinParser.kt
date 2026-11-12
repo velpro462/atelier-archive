@@ -99,7 +99,7 @@ object DouyinParser {
             // Step 4: Primary resolver for Douyin notes & protected works: Headless WebView
             if (context != null) {
                 val targetWebUrl = if (itemId.isNotBlank()) {
-                    "https://www.douyin.com/note/$itemId"
+                    if (finalUrl.contains("/video/")) "https://www.douyin.com/video/$itemId" else "https://www.douyin.com/note/$itemId"
                 } else finalUrl
                 val webResult = DouyinWebResolver.resolve(context, targetWebUrl, itemId, customCookie)
                 if (webResult.isSuccess) {
