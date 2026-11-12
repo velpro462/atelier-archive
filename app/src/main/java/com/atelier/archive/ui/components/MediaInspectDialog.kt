@@ -1,19 +1,24 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.atelier.archive.ui.components
 
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
 import androidx.compose.animation.*
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -41,16 +46,20 @@ import coil.request.ImageRequest
 import com.atelier.archive.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 @OptIn(UnstableApi::class)
 @Composable
 fun MediaInspectDialog(
-    mediaUrl: String,
     isVideo: Boolean,
+    videoUrl: String?,
+    images: List<String>,
+    initialIndex: Int = 0,
+    platform: String = "",
+    onSaveSingleImage: (Int) -> Unit = {},
+    onSaveAllImages: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
-
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -60,14 +69,18 @@ fun MediaInspectDialog(
                 .fillMaxSize()
                 .background(InkPrimary.copy(alpha = 0.96f))
         ) {
-            if (isVideo) {
+            if (isVideo && !videoUrl.isNullOrBlank()) {
                 VideoPreviewPlayer(
-                    videoUrl = mediaUrl,
+                    videoUrl = videoUrl,
                     onDismiss = onDismiss
                 )
-            } else {
-                ImagePreviewViewer(
-                    imageUrl = mediaUrl,
+            } else if (images.isNotEmpty()) {
+                ImagePreviewPager(
+                    images = images,
+                    initialIndex = initialIndex,
+                    platform = platform,
+                    onSaveSingleImage = onSaveSingleImage,
+                    onSaveAllImages = onSaveAllImages,
                     onDismiss = onDismiss
                 )
             }
@@ -308,16 +321,111 @@ private fun VideoPreviewPlayer(
 }
 
 @Composable
-private fun ImagePreviewViewer(
-    imageUrl: String,
+private fun ImagePreviewPager(
+    images: List<String>,
+    initialIndex: Int,
+    platform: String,
+    onSaveSingleImage: (Int) -> Unit,
+    onSaveAllImages: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val safeInitial = initialIndex.coerceIn(0, (images.size - 1).coerceAtLeast(0))
+    val pagerState = rememberPagerState(
+        initialPage = safeInitial,
+        pageCount = { images.size }
+    )
+
+    val referer = if (platform.contains("XHS", ignoreCase = true)) {
+        "https://www.xiaohongshu.com/"
+    } else {
+        "https://www.douyin.com/"
+    }
 
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
+        // Horizontal Swiping Pager
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { pageIndex ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp, vertical = 88.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(images[pageIndex])
+                        .addHeader("Referer", referer)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Image ${pageIndex + 1}",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(3.dp))
+                        .border(0.6.dp, ChampagneGold.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
+                )
+            }
+        }
+
+        // Left Navigation Chevron (if multiple images and not on first page)
+        if (images.size > 1 && pagerState.currentPage > 0) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 12.dp)
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(InkPrimary.copy(alpha = 0.75f))
+                    .border(1.dp, ChampagneGold.copy(alpha = 0.8f), CircleShape)
+                    .clickable {
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.ChevronLeft,
+                    contentDescription = "Previous Image",
+                    tint = ChampagneGold,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+
+        // Right Navigation Chevron (if multiple images and not on last page)
+        if (images.size > 1 && pagerState.currentPage < images.size - 1) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 12.dp)
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(InkPrimary.copy(alpha = 0.75f))
+                    .border(1.dp, ChampagneGold.copy(alpha = 0.8f), CircleShape)
+                    .clickable {
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.ChevronRight,
+                    contentDescription = "Next Image",
+                    tint = ChampagneGold,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+
         // Top Header Line
         Row(
             modifier = Modifier
@@ -336,44 +444,119 @@ private fun ImagePreviewViewer(
                     color = ChampagneGold
                 )
                 Text(
-                    text = "无水印无损画质预览",
+                    text = if (images.size > 1)
+                        "可左右滑动切换画页 (第 ${pagerState.currentPage + 1} / ${images.size} 张)"
+                    else
+                        "无水印无损画质预览",
                     style = EditorialTypography.labelSmall.copy(fontSize = 10.sp),
                     color = ParchmentBase.copy(alpha = 0.8f)
                 )
             }
 
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(ParchmentBase.copy(alpha = 0.15f))
-                    .border(0.8.dp, ChampagneGold, CircleShape)
-                    .clickable(onClick = onDismiss),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Close",
-                    tint = ParchmentBase,
-                    modifier = Modifier.size(18.dp)
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Page indicator badge
+                if (images.size > 1) {
+                    Box(
+                        modifier = Modifier
+                            .background(InkPrimary.copy(alpha = 0.85f), RoundedCornerShape(2.dp))
+                            .border(0.6.dp, ChampagneGold, RoundedCornerShape(2.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = String.format("%02d / %02d", pagerState.currentPage + 1, images.size),
+                            fontFamily = FontFamily.Serif,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ChampagneGold
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                }
+
+                // Close Button
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(ParchmentBase.copy(alpha = 0.15f))
+                        .border(0.8.dp, ChampagneGold, CircleShape)
+                        .clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = ParchmentBase,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
 
-        // Image View with luxury border
-        AsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(imageUrl)
-                .crossfade(true)
-                .build(),
-            contentDescription = "Image Preview",
-            contentScale = ContentScale.Fit,
+        // Bottom Action Bar: Save Current & Save All
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 84.dp)
-                .clip(RoundedCornerShape(3.dp))
-                .border(0.6.dp, ChampagneGold.copy(alpha = 0.6f), RoundedCornerShape(3.dp))
-        )
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .background(InkPrimary.copy(alpha = 0.85f))
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Save Current Image Button
+            Button(
+                onClick = { onSaveSingleImage(pagerState.currentPage) },
+                shape = RoundedCornerShape(2.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ChampagneGold,
+                    contentColor = InkPrimary
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = "Save Current",
+                    modifier = Modifier.size(15.dp),
+                    tint = InkPrimary
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (images.size > 1) "保存第 ${pagerState.currentPage + 1} 张原图" else "保存无水印原图",
+                    style = EditorialTypography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = InkPrimary
+                )
+            }
+
+            // Save All Images Button (if note has multiple images)
+            if (images.size > 1) {
+                OutlinedButton(
+                    onClick = onSaveAllImages,
+                    shape = RoundedCornerShape(2.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ChampagneGold),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = ChampagneGold
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = "Save All",
+                        modifier = Modifier.size(15.dp),
+                        tint = ChampagneGold
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "保存全部 (${images.size} 张)",
+                        style = EditorialTypography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = ChampagneGold
+                    )
+                }
+            }
+        }
     }
 }
 
