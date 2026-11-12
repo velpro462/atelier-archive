@@ -246,45 +246,65 @@ object XhsParser {
     }
 
     private fun extractCleanImageUrl(imgObj: JSONObject): String {
-        // 1. Direct url (Mobile H5 signed full url)
-        val directUrl = imgObj.optString("url", "")
-        if (directUrl.isNotBlank()) {
-            return ensureHttps(directUrl)
+        // 1. Direct fileId from object (raw lossless original stored on public CDN without watermark)
+        val fileId = imgObj.optString("fileId", "").trim()
+        if (fileId.isNotBlank()) {
+            return "https://sns-img-hw.xhscdn.com/$fileId"
         }
 
-        // 2. Direct urlDefault (Desktop signed full url)
-        val urlDefault = imgObj.optString("urlDefault", "")
-        if (urlDefault.isNotBlank()) {
-            return ensureHttps(urlDefault)
+        // 2. Direct traceId from object
+        val traceId = imgObj.optString("traceId", "").trim()
+        if (traceId.isNotBlank()) {
+            return "https://sns-img-hw.xhscdn.com/$traceId"
         }
 
-        // 3. Check infoList array
+        // 3. Extract clean ID from url or urlDefault (bypasses !h5_1080jpg and !nd_dft... watermarked modifiers)
+        val rawUrl = imgObj.optString("url", "").ifBlank {
+            imgObj.optString("urlDefault", "")
+        }
+
+        if (rawUrl.isNotBlank()) {
+            val cleanId = extractFileIdFromUrl(rawUrl)
+            if (cleanId.isNotBlank()) {
+                return "https://sns-img-hw.xhscdn.com/$cleanId"
+            }
+        }
+
+        // 4. Check infoList array
         val infoList = imgObj.optJSONArray("infoList")
         if (infoList != null && infoList.length() > 0) {
-            var candidate = ""
             for (i in 0 until infoList.length()) {
                 val item = infoList.optJSONObject(i) ?: continue
-                val scene = item.optString("imageScene")
-                val u = item.optString("url")
-                if ((scene == "H5_DTL" || scene == "WB_DFT") && u.isNotBlank()) {
-                    candidate = u
-                    break
+                val u = item.optString("url", "")
+                val cleanId = extractFileIdFromUrl(u)
+                if (cleanId.isNotBlank()) {
+                    return "https://sns-img-hw.xhscdn.com/$cleanId"
                 }
-                if (candidate.isBlank() && u.isNotBlank()) {
-                    candidate = u
-                }
-            }
-            if (candidate.isNotBlank()) {
-                return ensureHttps(candidate)
             }
         }
 
-        // 4. Fallback traceId
-        val traceId = imgObj.optString("traceId", "")
-        if (traceId.isNotBlank()) {
-            return "https://sns-webpic-qc.xhscdn.com/265/$traceId"
+        // 5. Ultimate fallback
+        if (rawUrl.isNotBlank()) {
+            return ensureHttps(rawUrl)
         }
 
+        return ""
+    }
+
+    private fun extractFileIdFromUrl(url: String): String {
+        val bangIdx = url.indexOf('!')
+        val target = if (bangIdx != -1) url.substring(0, bangIdx) else url
+        val qIdx = target.indexOf('?')
+        val cleanPath = if (qIdx != -1) target.substring(0, qIdx) else target
+
+        val segments = cleanPath.split("/")
+        if (segments.size >= 2 && segments[segments.size - 2] == "notes_uhdr") {
+            return "notes_uhdr/" + segments.last()
+        }
+        val last = segments.lastOrNull().orEmpty()
+        if (last.length >= 20) {
+            return last
+        }
         return ""
     }
 
