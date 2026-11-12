@@ -145,8 +145,11 @@ object XhsParser {
             val streamObj = mediaObj?.optJSONObject("stream")
             val h264Arr = streamObj?.optJSONArray("h264")
             val h265Arr = streamObj?.optJSONArray("h265")
-            videoUrl = h264Arr?.optJSONObject(0)?.optString("masterUrl")
+            val rawVideo = h264Arr?.optJSONObject(0)?.optString("masterUrl")
                 ?: h265Arr?.optJSONObject(0)?.optString("masterUrl")
+                ?: videoObj?.optString("src")
+                ?: videoObj?.optString("url")
+            videoUrl = if (!rawVideo.isNullOrBlank()) ensureHttps(rawVideo) else null
 
             val imageList = note.optJSONArray("imageList")
             if (imageList != null && imageList.length() > 0) {
@@ -209,8 +212,11 @@ object XhsParser {
             val streamObj = mediaObj?.optJSONObject("stream")
             val h264Arr = streamObj?.optJSONArray("h264")
             val h265Arr = streamObj?.optJSONArray("h265")
-            videoUrl = h264Arr?.optJSONObject(0)?.optString("masterUrl")
+            val rawVideo = h264Arr?.optJSONObject(0)?.optString("masterUrl")
                 ?: h265Arr?.optJSONObject(0)?.optString("masterUrl")
+                ?: videoObj?.optString("src")
+                ?: videoObj?.optString("url")
+            videoUrl = if (!rawVideo.isNullOrBlank()) ensureHttps(rawVideo) else null
 
             val imageList = note.optJSONArray("imageList")
             if (imageList != null && imageList.length() > 0) {
