@@ -52,12 +52,12 @@ object DouyinWebResolver {
                     avatar = avatarEl.src;
                 }
 
-                // 4. Expected slides indicator count e.g. "1/4", "2 / 4", "1 \u00a0 / \u00a0 4"
+                // 4. Expected slides indicator count e.g. "1/4", "2 / 4", "1 \u00a0 / \u00a0 4", "1 · / · 8"
                 let totalExpected = 0;
-                const indEls = document.querySelectorAll('[class*="indicator"], [class*="progress"], [class*="pagination"], [data-e2e*="indicator"], .slider-video *');
+                const indEls = document.querySelectorAll('[class*="indicator"], [class*="progress"], [class*="pagination"], [data-e2e*="indicator"], .slider-video *, main *');
                 for (const el of indEls) {
                     const txt = el.innerText || '';
-                    const m = txt.match(/(\d+)\s*[\/|\\]\s*(\d+)/);
+                    const m = txt.match(/(\d+)\s*[\u00b7\s]*[\/|\\][\u00b7\s]*(\d+)/);
                     if (m && parseInt(m[2], 10) > 1 && parseInt(m[2], 10) <= 100) {
                         totalExpected = parseInt(m[2], 10);
                         break;
@@ -65,9 +65,15 @@ object DouyinWebResolver {
                 }
                 if (totalExpected === 0) {
                     const bodyText = document.body.innerText || '';
-                    const m = bodyText.match(/(?:^|\s|\n)(\d+)\s*[\/|\\]\s*(\d+)(?:${'$'}|\s|\n)/);
+                    const m = bodyText.match(/(?:^|\s|\n|[^\d])(\d{1,2})\s*[\u00b7\s]*[\/|\\][\u00b7\s]*(\d{1,2})(?:${'$'}|\s|\n|[^\d])/);
                     if (m && parseInt(m[2], 10) > 1 && parseInt(m[2], 10) <= 100) {
                         totalExpected = parseInt(m[2], 10);
+                    }
+                }
+                if (totalExpected === 0) {
+                    const pageBtns = document.querySelectorAll('main button[class*="QAUHVhVM"]');
+                    if (pageBtns && pageBtns.length > 1) {
+                        totalExpected = pageBtns.length;
                     }
                 }
 
@@ -99,9 +105,9 @@ object DouyinWebResolver {
                         }
                     }
 
-                    // (c) Click pagination dots or slide steps
-                    const dots = document.querySelectorAll('[class*="indicator"] span, [class*="indicator"] [class*="dot"], [class*="pagination"] *');
-                    for (const dot of dots) {
+                    // (c) Click pagination step items / buttons
+                    const pageBtns = document.querySelectorAll('main button[class*="QAUHVhVM"], [class*="indicator"] span, [class*="indicator"] [class*="dot"], [class*="pagination"] *');
+                    for (const dot of pageBtns) {
                         try { dot.click(); } catch(e) {}
                     }
                 } catch(e) {}
@@ -113,7 +119,7 @@ object DouyinWebResolver {
                 const seenTos = new Set();
                 for (const img of candidateEls) {
                     const src = img.src || '';
-                    if (!src.includes('douyinpic.com')) continue;
+                    if (!src.includes('douyinpic.com') && !src.includes('bytecdn') && !src.includes('byteimg')) continue;
 
                     // Blacklist
                     if (src.includes('avatar') || src.includes('tos-cn-avt') || src.includes('100x100')) continue;
@@ -130,8 +136,9 @@ object DouyinWebResolver {
                                          src.includes('~tplv-dy');
 
                     if (isAwemeSlide) {
-                        const m = src.match(/tos-cn[^\/~?]+/);
-                        const key = m ? m[0] : src;
+                        // Match unique image asset file ID across all buckets (tos-cn-i-XXXX/FILE_ID)
+                        const m = src.match(/tos-cn-[^/?#]+\/([a-zA-Z0-9_-]+)/);
+                        const key = m ? m[0] : src.split('?')[0];
                         if (!seenTos.has(key)) {
                             seenTos.add(key);
                             images.push(src);
