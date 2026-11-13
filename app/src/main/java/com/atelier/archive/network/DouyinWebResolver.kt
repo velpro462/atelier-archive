@@ -31,45 +31,83 @@ object DouyinWebResolver {
             try {
                 const isExplicitNote = $isExplicitNote;
 
-                // 1. Cycle slide transitions to trigger hydration of all lazy slides
-                try {
-                    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, bubbles: true }));
-                    const nextArrow = document.querySelector('.basePlayerContainer [class*="arrow-right"], .basePlayerContainer [class*="next"], [class*="dySwiper"] [class*="arrow"], [class*="slider"] [class*="arrow"]');
-                    if (nextArrow) nextArrow.click();
-                } catch(e) {}
-
-                // 2. Title
+                // 1. Title
                 let title = (document.title || '').replace(/ - 抖音${'$'}/, '').trim();
                 const h1 = document.querySelector('h1, [data-e2e="detail-title"], .title');
                 if (h1 && h1.innerText && h1.innerText.trim().length > 0) {
                     title = h1.innerText.trim();
                 }
 
-                // 3. Author
+                // 2. Author
                 let author = '';
                 const authorEl = document.querySelector('[data-e2e="user-info"] a, [data-e2e="user-title"], .account-name, .author-name, a[href*="/user/"]');
                 if (authorEl && authorEl.innerText) {
                     author = authorEl.innerText.trim();
                 }
 
-                // 4. Avatar
+                // 3. Avatar
                 let avatar = '';
                 const avatarEl = document.querySelector('img[src*="aweme-avatar"], img[src*="tos-cn-avt"]');
                 if (avatarEl && avatarEl.src) {
                     avatar = avatarEl.src;
                 }
 
-                // 5. Total expected slides indicator e.g. "1/4" or "1 / 4"
+                // 4. Expected slides indicator count e.g. "1/4", "2 / 4", "1 \u00a0 / \u00a0 4"
                 let totalExpected = 0;
-                const matchSlide = (document.body.innerText || '').match(/(?:^|\s)(\d+)\s*\/\s*(\d+)(?:${'$'}|\s)/);
-                if (matchSlide && matchSlide[2]) {
-                    totalExpected = parseInt(matchSlide[2], 10);
+                const indEls = document.querySelectorAll('[class*="indicator"], [class*="progress"], [class*="pagination"], [data-e2e*="indicator"], .slider-video *');
+                for (const el of indEls) {
+                    const txt = el.innerText || '';
+                    const m = txt.match(/(\d+)\s*[\/|\\]\s*(\d+)/);
+                    if (m && parseInt(m[2], 10) > 1 && parseInt(m[2], 10) <= 100) {
+                        totalExpected = parseInt(m[2], 10);
+                        break;
+                    }
+                }
+                if (totalExpected === 0) {
+                    const bodyText = document.body.innerText || '';
+                    const m = bodyText.match(/(?:^|\s|\n)(\d+)\s*[\/|\\]\s*(\d+)(?:${'$'}|\s|\n)/);
+                    if (m && parseInt(m[2], 10) > 1 && parseInt(m[2], 10) <= 100) {
+                        totalExpected = parseInt(m[2], 10);
+                    }
                 }
 
-                // 6. Genuine Aweme note slides only
-                // Query player/swiper containers first
-                const sliderImgs = Array.from(document.querySelectorAll('.basePlayerContainer img, .slider-video img, .dySwiperSlide img, [class*="basePlayer"] img, [class*="swiper"] img, [class*="slider"] img'));
-                const candidateEls = sliderImgs.length > 0 ? sliderImgs : Array.from(document.querySelectorAll('img'));
+                // 5. Active Slide Progression: Cycle through slides on every poll!
+                try {
+                    // (a) Dispatch ArrowRight keyboard event to document, window, and player
+                    ['keydown', 'keyup'].forEach(type => {
+                        const evt = new KeyboardEvent(type, {
+                            key: 'ArrowRight',
+                            code: 'ArrowRight',
+                            keyCode: 39,
+                            which: 39,
+                            bubbles: true,
+                            cancelable: true
+                        });
+                        document.dispatchEvent(evt);
+                        window.dispatchEvent(evt);
+                        document.body.dispatchEvent(evt);
+                        const p = document.querySelector('.slider-video, .basePlayerContainer, [class*="swiper"], [class*="slider"]');
+                        if (p) p.dispatchEvent(evt);
+                    });
+
+                    // (b) Click all next / right arrow buttons in the slider container
+                    const nextBtns = document.querySelectorAll('.slider-video button, .basePlayerContainer button, [class*="arrow"], [class*="next"], [class*="switch"], [class*="slide-btn"]');
+                    for (const btn of nextBtns) {
+                        const cls = ((btn.className || '') + ' ' + (btn.getAttribute('aria-label') || '')).toLowerCase();
+                        if (cls.includes('right') || cls.includes('next') || cls.includes('after') || cls.includes('arrow')) {
+                            try { btn.click(); } catch(e) {}
+                        }
+                    }
+
+                    // (c) Click pagination dots or slide steps
+                    const dots = document.querySelectorAll('[class*="indicator"] span, [class*="indicator"] [class*="dot"], [class*="pagination"] *');
+                    for (const dot of dots) {
+                        try { dot.click(); } catch(e) {}
+                    }
+                } catch(e) {}
+
+                // 6. Genuine Aweme note slides
+                const candidateEls = Array.from(document.querySelectorAll('.basePlayerContainer img, .slider-video img, .dySwiperSlide img, [class*="basePlayer"] img, [class*="swiper"] img, [class*="slider"] img, main img'));
 
                 const images = [];
                 const seenTos = new Set();
@@ -77,7 +115,7 @@ object DouyinWebResolver {
                     const src = img.src || '';
                     if (!src.includes('douyinpic.com')) continue;
 
-                    // Blacklist: avatars, comments emojis, recommendation covers, icons
+                    // Blacklist
                     if (src.includes('avatar') || src.includes('tos-cn-avt') || src.includes('100x100')) continue;
                     if (src.includes('emoji') || src.includes('sticker') || src.includes('tos-cn-i-tsj2')) continue;
                     const alt = img.getAttribute('alt') || '';
@@ -101,7 +139,7 @@ object DouyinWebResolver {
                     }
                 }
 
-                // 7. Video extraction: STRICTLY ignore if explicit note, and NEVER match hidden xg-video or sidebar recommendation videos
+                // 7. Video extraction
                 let videoUrl = '';
                 if (!isExplicitNote) {
                     const videoEl = document.querySelector('.basePlayerContainer video, [data-e2e="feed-video"] video');
@@ -113,35 +151,16 @@ object DouyinWebResolver {
                     }
                 }
 
-                // 8. Ready condition
-                let pageReady = false;
-                if (isExplicitNote) {
-                    if (totalExpected > 0 && images.length >= totalExpected) {
-                        pageReady = true;
-                    } else if (images.length > 0) {
-                        pageReady = true;
-                    }
-                } else {
-                    if (totalExpected > 0 && images.length >= totalExpected) {
-                        pageReady = true;
-                    } else if (images.length > 0 && !videoUrl) {
-                        pageReady = true;
-                    } else if (videoUrl.length > 0 && images.length === 0) {
-                        pageReady = true;
-                    }
-                }
-
                 return JSON.stringify({
                     title: title,
                     author: author,
                     avatar: avatar,
                     images: images,
                     videoUrl: videoUrl,
-                    totalExpected: totalExpected,
-                    pageReady: pageReady
+                    totalExpected: totalExpected
                 });
             } catch(e) {
-                return JSON.stringify({ error: e.toString(), pageReady: false });
+                return JSON.stringify({ error: e.toString() });
             }
         })()
     """.trimIndent()
@@ -253,11 +272,12 @@ object DouyinWebResolver {
                                 resultJson
                             }
                             val obj = JSONObject(unescaped)
-                            val pageReady = obj.optBoolean("pageReady", false)
                             val imagesArr = obj.optJSONArray("images")
                             val videoUrl = if (!isExplicitNote) obj.optString("videoUrl", "") else ""
                             val totalExpected = obj.optInt("totalExpected", 0)
-                            if (totalExpected > 0) expectedCount = totalExpected
+                            if (totalExpected > 0 && expectedCount == 0) {
+                                expectedCount = totalExpected
+                            }
 
                             val title = obj.optString("title", "")
                             if (title.isNotBlank() && title != "抖音" && bestTitle.isBlank()) {
@@ -285,11 +305,21 @@ object DouyinWebResolver {
                             }
 
                             val elapsedMs = System.currentTimeMillis() - startTime
-                            val hasAllExpectedImages = expectedCount > 0 && accumulatedImages.size >= expectedCount
-                            val hasVideo = !isExplicitNote && bestVideo.isNotBlank() && accumulatedImages.isEmpty() && elapsedMs > 2500
-                            val hasTimedImages = elapsedMs > 2500 && accumulatedImages.isNotEmpty()
 
-                            if (hasAllExpectedImages || hasVideo || hasTimedImages || (pageReady && accumulatedImages.isNotEmpty() && expectedCount == 0)) {
+                            // Completion conditions:
+                            // 1. All expected slides have been found (e.g. expected 4, found >= 4)
+                            val hasAllExpected = expectedCount > 0 && accumulatedImages.size >= expectedCount
+
+                            // 2. Timed slides collection:
+                            // - If expectedCount > 0, give at least 5.5s to gather all slides before timing out
+                            // - If expectedCount == 0, give at least 3.5s of swiping before accepting accumulated images
+                            val hasTimedImages = (expectedCount > 0 && accumulatedImages.isNotEmpty() && elapsedMs > 5500) ||
+                                                 (expectedCount == 0 && accumulatedImages.isNotEmpty() && elapsedMs > 3500)
+
+                            // 3. True video post (non-note post, verified video, empty images)
+                            val hasVideo = !isExplicitNote && bestVideo.isNotBlank() && accumulatedImages.isEmpty() && elapsedMs > 3000
+
+                            if (hasAllExpected || hasTimedImages || hasVideo) {
                                 val isVideo = !isExplicitNote && bestVideo.isNotBlank() && accumulatedImages.isEmpty()
                                 val finalTitle = bestTitle.ifBlank { "UNTITLED DOUYIN WORK · 抖音作品" }
                                 val finalAuthor = bestAuthor.ifBlank { "DOUYIN CREATOR" }
@@ -317,7 +347,7 @@ object DouyinWebResolver {
                     override fun run() {
                         if (!isCompleted.get()) {
                             evaluatePage()
-                            handler.postDelayed(this, 300)
+                            handler.postDelayed(this, 350)
                         }
                     }
                 }
