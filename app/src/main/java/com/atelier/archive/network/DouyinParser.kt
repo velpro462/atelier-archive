@@ -86,8 +86,13 @@ object DouyinParser {
 
             // Check if explicitly a photo note
             val isExplicitNote = rawText.contains("图文") ||
+                    rawText.contains("动图") ||
+                    rawText.contains("图集") ||
+                    rawText.contains("图片") ||
                     finalUrl.contains("/note/") ||
-                    rawUrl.contains("/note/")
+                    rawUrl.contains("/note/") ||
+                    finalUrl.contains("/slides/") ||
+                    finalUrl.contains("is_slides=1")
 
             // Step 2: Try Method A2 (fast API for standard video notes)
             // If explicit note, do NOT accept video from iteminfo API!
@@ -107,7 +112,11 @@ object DouyinParser {
             // Step 4: Primary resolver for Douyin notes & protected works: Headless WebView
             if (context != null) {
                 val targetWebUrl = if (itemId.isNotBlank()) {
-                    if (finalUrl.contains("/video/")) "https://www.douyin.com/video/$itemId" else "https://www.douyin.com/note/$itemId"
+                    if (finalUrl.contains("/video/") && !finalUrl.contains("/slides/") && !finalUrl.contains("is_slides=1")) {
+                        "https://www.douyin.com/video/$itemId"
+                    } else {
+                        "https://www.douyin.com/note/$itemId"
+                    }
                 } else finalUrl
                 val webResult = DouyinWebResolver.resolve(context, targetWebUrl, itemId, customCookie, isExplicitNote = isExplicitNote)
                 if (webResult.isSuccess) {
