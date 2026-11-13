@@ -220,26 +220,30 @@ object DouyinWebResolver {
                 }
             }
 
+            fun buildNoteDetail(isVideo: Boolean): NoteDetail {
+                val finalTitle = bestTitle.ifBlank { "UNTITLED DOUYIN WORK · 抖音作品" }
+                val finalAuthor = bestAuthor.ifBlank { "DOUYIN CREATOR" }
+                return NoteDetail(
+                    id = itemId.ifBlank { "douyin_${System.currentTimeMillis()}" },
+                    title = finalTitle,
+                    desc = finalTitle,
+                    authorName = finalAuthor,
+                    authorAvatar = bestAvatar,
+                    platform = Platform.DOUYIN,
+                    type = if (isVideo) NoteType.VIDEO else NoteType.IMAGE,
+                    images = accumulatedImages.toList(),
+                    videoUrl = if (isVideo) bestVideo else null,
+                    shareUrl = targetUrl,
+                    tags = emptyList()
+                )
+            }
+
             // Set up timeout (9 seconds)
             handler.postDelayed({
                 val hasImages = accumulatedImages.isNotEmpty()
                 val hasVid = !isExplicitNote && bestVideo.isNotBlank()
                 if (hasImages || hasVid) {
-                    val isVideo = hasVid && !hasImages
-                    val detail = NoteDetail(
-                        id = itemId.ifBlank { "douyin_${System.currentTimeMillis()}" },
-                        title = bestTitle.ifBlank { "UNTITLED DOUYIN WORK · 抖音作品" },
-                        desc = bestTitle.ifBlank { "UNTITLED DOUYIN WORK · 抖音作品" },
-                        authorName = bestAuthor.ifBlank { "DOUYIN CREATOR" },
-                        authorAvatar = bestAvatar,
-                        platform = Platform.DOUYIN,
-                        type = if (isVideo) NoteType.VIDEO else NoteType.IMAGE,
-                        images = accumulatedImages.toList(),
-                        videoUrl = if (isVideo) bestVideo else null,
-                        shareUrl = targetUrl,
-                        tags = emptyList()
-                    )
-                    finishSuccess(detail)
+                    finishSuccess(buildNoteDetail(isVideo = hasVid && !hasImages))
                 } else {
                     finishError("DOUYIN EXTRACTION TIMEOUT · 页面解析超时，请检查网络或作品状态")
                 }
@@ -328,23 +332,7 @@ object DouyinWebResolver {
 
                             if (hasAllExpected || hasTimedImages || hasVideo) {
                                 val isVideo = !isExplicitNote && bestVideo.isNotBlank() && accumulatedImages.isEmpty()
-                                val finalTitle = bestTitle.ifBlank { "UNTITLED DOUYIN WORK · 抖音作品" }
-                                val finalAuthor = bestAuthor.ifBlank { "DOUYIN CREATOR" }
-
-                                val detail = NoteDetail(
-                                    id = itemId.ifBlank { "douyin_${System.currentTimeMillis()}" },
-                                    title = finalTitle,
-                                    desc = finalTitle,
-                                    authorName = finalAuthor,
-                                    authorAvatar = bestAvatar,
-                                    platform = Platform.DOUYIN,
-                                    type = if (isVideo) NoteType.VIDEO else NoteType.IMAGE,
-                                    images = accumulatedImages.toList(),
-                                    videoUrl = if (isVideo) bestVideo else null,
-                                    shareUrl = targetUrl,
-                                    tags = emptyList()
-                                )
-                                finishSuccess(detail)
+                                finishSuccess(buildNoteDetail(isVideo))
                             }
                         } catch (_: Exception) {}
                     }
