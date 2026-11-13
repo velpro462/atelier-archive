@@ -22,6 +22,7 @@ import com.atelier.archive.ui.theme.*
 @Composable
 fun EditorialHeader(
     modifier: Modifier = Modifier,
+    versionName: String = "V1.0.13",
     onOpenHistory: () -> Unit = {}
 ) {
     Column(
@@ -38,7 +39,7 @@ fun EditorialHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "EDITION · V1.0.7",
+                text = "EDITION · $versionName",
                 style = EditorialTypography.labelSmall,
                 color = InkMuted
             )
@@ -81,15 +82,15 @@ fun EditorialHeader(
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // Main Masthead: Refined Haute Couture Chinese Serif
+        // Elevated Main Masthead: Dual Platform Lossless Extraction
         Text(
-            text = "无 印 · 原 图",
+            text = "小红书 · 抖音双平台",
             fontFamily = FontFamily.Serif,
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Normal,
-            letterSpacing = 8.sp,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 4.sp,
             color = InkPrimary,
             textAlign = TextAlign.Center
         )
@@ -98,9 +99,12 @@ fun EditorialHeader(
 
         // Subhead
         Text(
-            text = "小红书 & 抖音双平台高定无水印原画提取",
-            style = EditorialTypography.labelMedium,
-            color = AntiqueBronze,
+            text = "无水印高清原图 · 原画视频 · 实况动图提取",
+            fontFamily = FontFamily.Serif,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Normal,
+            letterSpacing = 1.5.sp,
+            color = DeepGold,
             textAlign = TextAlign.Center
         )
 
