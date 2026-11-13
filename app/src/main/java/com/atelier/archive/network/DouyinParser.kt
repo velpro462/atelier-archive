@@ -29,11 +29,6 @@ object DouyinParser {
     private val ID_REGEX = Pattern.compile("(?:video|note)/([0-9]{18,21})")
     private val DIGITS_REGEX = Pattern.compile("([0-9]{18,21})")
 
-    private data class ApiParseResult(
-        val note: NoteDetail? = null,
-        val restrictionReason: String? = null
-    )
-
     suspend fun parseFromText(
         rawText: String,
         customCookie: String = "",
@@ -52,37 +47,17 @@ object DouyinParser {
                 .header("User-Agent", MOBILE_UA)
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                 .header("Referer", "https://www.douyin.com/")
-
-            if (customCookie.isNotBlank()) {
-                reqBuilder.header("Cookie", customCookie)
-            }
+                .apply { if (customCookie.isNotBlank()) header("Cookie", customCookie) }
 
             val response = client.newCall(reqBuilder.build()).execute()
             val finalUrl = response.request.url.toString()
             val html = response.body?.string().orEmpty()
 
-            // Extract itemId (e.g. 7659378371922580709)
-            var itemId = ""
-            val idMatcher = ID_REGEX.matcher(finalUrl)
-            if (idMatcher.find()) {
-                itemId = idMatcher.group(1) ?: ""
-            }
-            if (itemId.isBlank()) {
-                val digitsMatcher = DIGITS_REGEX.matcher(finalUrl)
-                if (digitsMatcher.find()) {
-                    itemId = digitsMatcher.group(1) ?: ""
-                }
-            }
-            if (itemId.isBlank()) {
-                val htmlMatcher = DIGITS_REGEX.matcher(html)
-                if (htmlMatcher.find()) {
-                    itemId = htmlMatcher.group(1) ?: ""
-                }
-            }
-
-            if (itemId.isBlank()) {
-                throw IllegalStateException("FAILED TO RESOLVE DOUYIN ITEM ID / 无法识别抖音作品ID")
-            }
+            // Extract itemId
+            val itemId = ID_REGEX.matcher(finalUrl).takeIf { it.find() }?.group(1)
+                ?: DIGITS_REGEX.matcher(finalUrl).takeIf { it.find() }?.group(1)
+                ?: DIGITS_REGEX.matcher(html).takeIf { it.find() }?.group(1)
+                ?: throw IllegalStateException("FAILED TO RESOLVE DOUYIN ITEM ID / 无法识别抖音作品ID")
 
             // Check if explicitly a photo note
             val isExplicitNote = rawText.contains("图文") ||
@@ -95,18 +70,31 @@ object DouyinParser {
                     finalUrl.contains("is_slides=1")
 
             // Step 2: Try Method A2 (fast API for standard video notes)
-            // If explicit note, do NOT accept video from iteminfo API!
             if (!isExplicitNote) {
-                val itemResult = tryParseItemInfo(itemId, finalUrl, customCookie)
-                if (itemResult.note != null && itemResult.note.type == NoteType.VIDEO) {
-                    return@runCatching itemResult.note
+                val itemNote = fetchIesDouyinApi(
+                    url = "https://www.iesdouyin.com/web/api/v2/aweme/iteminfo/?item_ids=$itemId",
+                    referer = "https://www.iesdouyin.com/",
+                    customCookie = customCookie,
+                    arrayKey = "item_list",
+                    itemId = itemId,
+                    finalUrl = finalUrl
+                )
+                if (itemNote != null && itemNote.type == NoteType.VIDEO) {
+                    return@runCatching itemNote
                 }
             }
 
-            // Step 3: Try Method A1 (slidesinfo API)
-            val slidesResult = tryParseSlidesInfo(itemId, finalUrl, customCookie)
-            if (slidesResult.note != null) {
-                return@runCatching slidesResult.note
+            // Step 3: Try Method A1 (slidesinfo API for photo notes)
+            val slidesNote = fetchIesDouyinApi(
+                url = "https://www.iesdouyin.com/web/api/v2/aweme/slidesinfo/?aweme_ids=[$itemId]&aid=1128",
+                referer = "https://www.iesdouyin.com/share/note/$itemId/",
+                customCookie = customCookie,
+                arrayKey = "aweme_details",
+                itemId = itemId,
+                finalUrl = finalUrl
+            )
+            if (slidesNote != null) {
+                return@runCatching slidesNote
             }
 
             // Step 4: Primary resolver for Douyin notes & protected works: Headless WebView
@@ -118,6 +106,7 @@ object DouyinParser {
                         "https://www.douyin.com/note/$itemId"
                     }
                 } else finalUrl
+
                 val webResult = DouyinWebResolver.resolve(context, targetWebUrl, itemId, customCookie, isExplicitNote = isExplicitNote)
                 if (webResult.isSuccess) {
                     val note = webResult.getOrNull()
@@ -130,10 +119,8 @@ object DouyinParser {
             // Step 5: Fallback to Method B (HTML RENDER_DATA / SSR)
             if (html.isNotBlank()) {
                 val htmlNote = tryParseFromHtml(html, itemId, finalUrl)
-                if (htmlNote != null) {
-                    if (!isExplicitNote || htmlNote.type == NoteType.IMAGE) {
-                        return@runCatching htmlNote
-                    }
+                if (htmlNote != null && (!isExplicitNote || htmlNote.type == NoteType.IMAGE)) {
+                    return@runCatching htmlNote
                 }
             }
 
@@ -141,73 +128,35 @@ object DouyinParser {
         }
     }
 
-    /**
-     * Method A1: Fetch via iesdouyin slidesinfo endpoint (Photo notes / Slides)
-     */
-    private fun tryParseSlidesInfo(itemId: String, finalUrl: String, customCookie: String): ApiParseResult {
+    private fun fetchIesDouyinApi(
+        url: String,
+        referer: String,
+        customCookie: String,
+        arrayKey: String,
+        itemId: String,
+        finalUrl: String
+    ): NoteDetail? {
         return try {
-            val apiUrl = "https://www.iesdouyin.com/web/api/v2/aweme/slidesinfo/?aweme_ids=[$itemId]&aid=1128"
             val req = Request.Builder()
-                .url(apiUrl)
+                .url(url)
                 .header("User-Agent", MOBILE_UA)
-                .header("Referer", "https://www.iesdouyin.com/share/note/$itemId/")
-                .apply {
-                    if (customCookie.isNotBlank()) header("Cookie", customCookie)
-                }
+                .header("Referer", referer)
+                .apply { if (customCookie.isNotBlank()) header("Cookie", customCookie) }
                 .build()
 
             val resp = client.newCall(req).execute()
-            if (!resp.isSuccessful) return ApiParseResult()
-
-            val jsonStr = resp.body?.string() ?: return ApiParseResult()
+            if (!resp.isSuccessful) return null
+            val jsonStr = resp.body?.string() ?: return null
             val root = JSONObject(jsonStr)
-
-            val awemeDetails = root.optJSONArray("aweme_details")
-            if (awemeDetails != null && awemeDetails.length() > 0) {
-                val item = awemeDetails.getJSONObject(0)
-                return ApiParseResult(note = parseAwemeItem(item, itemId, finalUrl))
-            }
-
-            ApiParseResult()
+            val arr = root.optJSONArray(arrayKey)
+            if (arr != null && arr.length() > 0) {
+                parseAwemeItem(arr.getJSONObject(0), itemId, finalUrl)
+            } else null
         } catch (_: Exception) {
-            ApiParseResult()
+            null
         }
     }
 
-    /**
-     * Method A2: Fetch via iesdouyin iteminfo endpoint (Video notes)
-     */
-    private fun tryParseItemInfo(itemId: String, finalUrl: String, customCookie: String): ApiParseResult {
-        return try {
-            val apiUrl = "https://www.iesdouyin.com/web/api/v2/aweme/iteminfo/?item_ids=$itemId"
-            val req = Request.Builder()
-                .url(apiUrl)
-                .header("User-Agent", MOBILE_UA)
-                .header("Referer", "https://www.iesdouyin.com/")
-                .apply {
-                    if (customCookie.isNotBlank()) header("Cookie", customCookie)
-                }
-                .build()
-
-            val resp = client.newCall(req).execute()
-            if (!resp.isSuccessful) return ApiParseResult()
-
-            val jsonStr = resp.body?.string() ?: return ApiParseResult()
-            val root = JSONObject(jsonStr)
-            val itemList = root.optJSONArray("item_list")
-            if (itemList != null && itemList.length() > 0) {
-                val item = itemList.getJSONObject(0)
-                return ApiParseResult(note = parseAwemeItem(item, itemId, finalUrl))
-            }
-            ApiParseResult()
-        } catch (_: Exception) {
-            ApiParseResult()
-        }
-    }
-
-    /**
-     * Method B: Parse HTML RENDER_DATA or _ROUTER_DATA
-     */
     private fun tryParseFromHtml(html: String, itemId: String, finalUrl: String): NoteDetail? {
         return try {
             val renderPattern = Pattern.compile("<script\\s+id=\"RENDER_DATA\"[^>]*>(.+?)</script>")
@@ -219,15 +168,10 @@ object DouyinParser {
 
                 val keys = root.keys()
                 while (keys.hasNext()) {
-                    val key = keys.next()
-                    val child = root.optJSONObject(key) ?: continue
-                    val videoDetail = child.optJSONObject("videoDetail")
-                    if (videoDetail != null) {
-                        return parseAwemeItem(videoDetail, itemId, finalUrl)
-                    }
-                    val aweme = child.optJSONObject("aweme")
-                    if (aweme != null) {
-                        return parseAwemeItem(aweme, itemId, finalUrl)
+                    val child = root.optJSONObject(keys.next()) ?: continue
+                    val target = child.optJSONObject("videoDetail") ?: child.optJSONObject("aweme")
+                    if (target != null) {
+                        return parseAwemeItem(target, itemId, finalUrl)
                     }
                 }
             }
@@ -241,11 +185,9 @@ object DouyinParser {
         val desc = item.optString("desc", "").ifBlank { "UNTITLED DOUYIN WORK · 抖音作品" }
         val authorObj = item.optJSONObject("author")
         val authorName = authorObj?.optString("nickname", "DOUYIN CREATOR") ?: "DOUYIN CREATOR"
-        val rawAvatar = authorObj?.optJSONObject("avatar_thumb")
-            ?.optJSONArray("url_list")?.optString(0) ?: ""
+        val rawAvatar = authorObj?.optJSONObject("avatar_thumb")?.optJSONArray("url_list")?.optString(0).orEmpty()
         val authorAvatar = if (rawAvatar.isNotBlank()) ensureHttps(rawAvatar) else ""
 
-        // Check if Photo Gallery (images)
         val imagesArray = item.optJSONArray("images")
         val isPhotoNote = imagesArray != null && imagesArray.length() > 0
 
@@ -255,29 +197,18 @@ object DouyinParser {
         if (isPhotoNote && imagesArray != null) {
             for (i in 0 until imagesArray.length()) {
                 val imgObj = imagesArray.optJSONObject(i) ?: continue
-                val urlList = imgObj.optJSONArray("url_list")
-                if (urlList != null && urlList.length() > 0) {
-                    val highRes = urlList.optString(0)
-                    if (highRes.isNotBlank()) {
-                        images.add(ensureHttps(highRes))
-                    }
+                val highRes = imgObj.optJSONArray("url_list")?.optString(0).orEmpty()
+                if (highRes.isNotBlank()) {
+                    images.add(ensureHttps(highRes))
                 }
             }
         } else {
-            // Video Note: Extract watermark-free play url
-            val videoObj = item.optJSONObject("video")
-            val playAddr = videoObj?.optJSONObject("play_addr")
-            val urlList = playAddr?.optJSONArray("url_list")
-            if (urlList != null && urlList.length() > 0) {
-                var bestUrl = urlList.optString(0)
-                if (bestUrl.contains("playwm")) {
-                    bestUrl = bestUrl.replace("playwm", "play")
-                }
-                videoUrl = ensureHttps(bestUrl)
+            val playAddr = item.optJSONObject("video")?.optJSONObject("play_addr")
+            val rawPlayUrl = playAddr?.optJSONArray("url_list")?.optString(0).orEmpty()
+            if (rawPlayUrl.isNotBlank()) {
+                videoUrl = ensureHttps(rawPlayUrl.replace("playwm", "play"))
             }
         }
-
-        val type = if (isPhotoNote) NoteType.IMAGE else NoteType.VIDEO
 
         return NoteDetail(
             id = itemId,
@@ -286,7 +217,7 @@ object DouyinParser {
             authorName = authorName,
             authorAvatar = authorAvatar,
             platform = Platform.DOUYIN,
-            type = type,
+            type = if (isPhotoNote) NoteType.IMAGE else NoteType.VIDEO,
             images = images,
             videoUrl = videoUrl,
             shareUrl = finalUrl,
