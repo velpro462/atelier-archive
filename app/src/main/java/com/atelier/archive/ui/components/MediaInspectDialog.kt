@@ -352,7 +352,12 @@ private fun ImagePreviewPager(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 12.dp, vertical = 88.dp),
+                    .padding(horizontal = 12.dp, vertical = 88.dp)
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismiss
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 AsyncImage(
@@ -367,6 +372,11 @@ private fun ImagePreviewPager(
                         .fillMaxSize()
                         .clip(RoundedCornerShape(3.dp))
                         .border(0.6.dp, ChampagneGold.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDismiss
+                        )
                 )
             }
         }
@@ -451,23 +461,24 @@ private fun ImagePreviewPager(
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Page indicator badge
+                // Prominently Styled Page Indicator Badge
                 if (images.size > 1) {
                     Box(
                         modifier = Modifier
-                            .background(InkPrimary.copy(alpha = 0.85f), RoundedCornerShape(2.dp))
-                            .border(0.6.dp, ChampagneGold, RoundedCornerShape(2.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(InkPrimary)
+                            .border(1.2.dp, ChampagneGold, RoundedCornerShape(3.dp))
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Text(
-                            text = String.format("%02d / %02d", pagerState.currentPage + 1, images.size),
+                            text = "第 ${pagerState.currentPage + 1} / ${images.size} 页",
                             fontFamily = FontFamily.Serif,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = ChampagneGold
                         )
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                 }
 
                 // Close Button
@@ -487,6 +498,28 @@ private fun ImagePreviewPager(
                         modifier = Modifier.size(18.dp)
                     )
                 }
+            }
+        }
+
+        // Floating Page Indicator Pill (Centered above bottom bar)
+        if (images.size > 1) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 76.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(InkPrimary.copy(alpha = 0.90f))
+                    .border(1.dp, ChampagneGold.copy(alpha = 0.85f), RoundedCornerShape(16.dp))
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = "第 ${pagerState.currentPage + 1} 页 · 共 ${images.size} 页",
+                    fontFamily = FontFamily.Serif,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = ChampagneGold,
+                    letterSpacing = 1.sp
+                )
             }
         }
 
