@@ -54,7 +54,9 @@ data class HistoryItem(
     val coverUrl: String,
     val shareUrl: String,
     val itemCount: Int,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val originalInput: String = "",
+    val cachedNote: NoteDetail? = null
 )
 
 data class InspectState(
