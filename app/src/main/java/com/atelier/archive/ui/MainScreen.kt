@@ -59,6 +59,7 @@ fun MainScreen(
         ) {
             // Masthead
             EditorialHeader(
+                versionName = "V1.0.13",
                 onOpenHistory = { viewModel.openHistory() }
             )
 
@@ -270,7 +271,7 @@ fun MainScreen(
                 HorizontalDivider(thickness = 0.5.dp, color = HairlineBorder)
                 Spacer(modifier = Modifier.height(14.dp))
                 Text(
-                    text = "无印原图 · 小红书 & 抖音双平台无水印原图原视提取",
+                    text = "小红书 & 抖音双平台无水印原图原视提取",
                     style = EditorialTypography.labelSmall,
                     color = InkMuted,
                     textAlign = TextAlign.Center
