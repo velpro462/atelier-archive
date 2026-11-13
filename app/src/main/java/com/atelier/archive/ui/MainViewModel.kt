@@ -94,8 +94,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectHistoryItem(item: HistoryItem) {
         _isHistoryOpen.value = false
-        updateInput(item.shareUrl)
-        parseUrl(item.shareUrl)
+        val displayLink = item.originalInput.ifBlank { item.shareUrl }
+        updateInput(displayLink)
+
+        // Instant local cache restore: no network request, no expiration, no rate limits!
+        if (item.cachedNote != null) {
+            _parseState.value = ParseState.Success(item.cachedNote)
+            _downloadState.value = DownloadState.Idle
+            _detectedClipboardUrl.value = null
+        } else {
+            // Fallback for legacy history without cache: re-parse original link
+            parseUrl(displayLink)
+        }
     }
 
     fun saveCookie(cookie: String) {
@@ -135,7 +145,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val result = ArchiveDispatcher.parse(target, _customCookie.value, getApplication())
             result.onSuccess { note ->
                 _parseState.value = ParseState.Success(note)
-                HistoryManager.addRecord(getApplication(), note)
+                HistoryManager.addRecord(getApplication(), note, originalInput = target)
             }.onFailure { error ->
                 _parseState.value = ParseState.Error(
                     error.localizedMessage ?: "FAILED TO EXTRACT NOTE FROM ARCHIVE"
